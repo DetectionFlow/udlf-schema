@@ -63,7 +63,7 @@ jsonschema.validate(detection, schema)
 
 ## Related Projects
 
-- [DetectionFlow](https://github.com/DetectionFlow/detectionflow) - Detection engineering platform
+- [DetectionFlow](https://www.detectionflow.com) - Detection engineering platform
 - [udlf-template](https://github.com/DetectionFlow/udlf-template) - Template for UDLF detection repositories
 
 ## License
