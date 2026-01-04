@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://detectionflow.io/schemas/udlf/v0.1.0",
+  "$id": "https://detectionflow.com/schemas/udlf/v0.1.0",
   "title": "UDLF Detection Content Schema v0.1.0",
   "description": "Universal Detection Lifecycle Format (UDLF) schema for managing detection content across multiple formats and platforms.",
   "type": "object",
@@ -194,7 +194,7 @@
       "then": {
         "properties": {
           "detection_content": {
-            "$ref": "references/sigma-detection-rule-schema.json"
+            "$ref": "https://raw.githubusercontent.com/DetectionFlow/udlf-schema/main/references/sigma-detection-rule-schema.json"
           }
         }
       }
