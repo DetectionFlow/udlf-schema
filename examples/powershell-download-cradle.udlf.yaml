@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=../udlf-schema.json
+id: 550e8400-e29b-41d4-a716-446655440000
+title: Detect PowerShell Download Cradle
+format: udlf
+lifecycle: deployed
+type: ttp
+
+metadata:
+  created_at: "2024-01-15"
+  updated_at: "2024-12-30"
+  created_by: Detection Engineering Team
+  version: "1.2.0"
+
+tags:
+  attack_tactics:
+    - Execution
+    - Command and Control
+  attack_techniques:
+    - T1059.001
+    - T1105
+  custom_tags:
+    - hr-team-only
+    - high-confidence
+
+detection_context:
+  severity: high
+  description: |
+    Detects PowerShell commands commonly used to download and execute malicious payloads.
+    This includes patterns like IEX(New-Object Net.WebClient).DownloadString() and similar
+    download cradle techniques used by threat actors for initial access and payload delivery.
+  false_positives:
+    - Legitimate software installation scripts
+    - System administration automation tools
+    - Software update mechanisms
+  how_to_implement:
+    - Enable PowerShell Script Block Logging (Event ID 4104) and Module Logging
+    - Ensure Windows PowerShell Operational logs are being collected
+  investigation_steps:
+    - Review the full script block content for malicious indicators
+    - Check the source URL being accessed
+    - Identify the user and process that executed the command
+    - Look for subsequent process creation or file writes
+  references:
+    - https://lolbas-project.github.io/
+
+detection_content:
+  language: spl
+  logic: |
+    index=windows sourcetype=WinEventLog:Microsoft-Windows-PowerShell/Operational
+    | rex field=Message "(?<script_block>(?s).*)"
+    | search script_block IN ("*DownloadString*", "*DownloadFile*", "*Net.WebClient*",
+                               "*Start-BitsTransfer*", "*Invoke-WebRequest*", "*wget*",
+                               "*curl*", "*IEX*", "*Invoke-Expression*")
+    | stats count by ComputerName, User, script_block
+    | where count > 0
+  es: testing_TODO_ADD_ES_SETTINGS

@@ -1,0 +1,203 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://detectionflow.io/schemas/udlf/v0.1.0",
+  "title": "UDLF Detection Content Schema v0.1.0",
+  "description": "Universal Detection Lifecycle Format (UDLF) schema for managing detection content across multiple formats and platforms.",
+  "type": "object",
+  "required": ["id", "title", "format", "lifecycle", "type", "detection_content"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for the detection content (UUID v4)"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Human-readable title for the detection"
+    },
+    "format": {
+      "type": "string",
+      "enum": ["udlf", "sigma", "escu"],
+      "description": "The detection format/specification being used"
+    },
+    "lifecycle": {
+      "type": "string",
+      "enum": ["research", "development", "testing", "deployed", "decommissioned"],
+      "description": "Current lifecycle stage of the detection"
+    },
+    "type": {
+      "type": "string",
+      "enum": ["ttp", "anomaly", "baseline", "hunting", "correlation", "other"],
+      "description": "The type/category of detection"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Metadata about the detection content",
+      "additionalProperties": false,
+      "properties": {
+        "created_at": {
+          "type": "string",
+          "format": "date",
+          "description": "ISO 8601 date when the detection was created (YYYY-MM-DD)"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date",
+          "description": "ISO 8601 date when the detection was last updated (YYYY-MM-DD)"
+        },
+        "created_by": {
+          "type": "string",
+          "description": "Author or creator of the detection"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "description": "Semantic version number (e.g., 1.0.0, 2.1.3)"
+        },
+        "source_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL to the source detection (for linked/referenced content)"
+        }
+      }
+    },
+    "tags": {
+      "type": "object",
+      "description": "Categorization tags for the detection",
+      "additionalProperties": false,
+      "properties": {
+        "attack_tactics": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "Reconnaissance",
+              "Resource Development",
+              "Initial Access",
+              "Execution",
+              "Persistence",
+              "Privilege Escalation",
+              "Defense Evasion",
+              "Credential Access",
+              "Discovery",
+              "Lateral Movement",
+              "Collection",
+              "Command and Control",
+              "Exfiltration",
+              "Impact"
+            ]
+          },
+          "description": "MITRE ATT&CK Enterprise tactic names"
+        },
+        "attack_techniques": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^T[0-9]{4}(\\.[0-9]{3})?$"
+          },
+          "description": "MITRE ATT&CK technique IDs (e.g., T1059, T1059.001)"
+        },
+        "custom_tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Custom organizational tags"
+        }
+      }
+    },
+    "detection_context": {
+      "type": "object",
+      "description": "Contextual information about the detection",
+      "additionalProperties": false,
+      "properties": {
+        "severity": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low", "informational"],
+          "description": "Severity level of the detection"
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed description of what the detection identifies"
+        },
+        "false_positives": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Known false positive scenarios"
+        },
+        "how_to_implement": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Step-by-step instructions for implementing the detection."
+        },
+        "investigation_steps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Steps for investigating alerts from this detection"
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "description": "Reference URLs for threat research and documentation"
+        }
+      }
+    },
+    "detection_content": {
+      "type": "object",
+      "description": "The detection logic content. For udlf: use language+logic. For sigma/escu: paste the native format fields directly.",
+      "properties": {
+        "language": {
+          "type": "string",
+          "enum": ["spl", "kql", "yara", "yara-l", "python", "sql"],
+          "description": "Query language used for the detection logic (for format=udlf)"
+        },
+        "logic": {
+          "type": "string",
+          "description": "The detection query/logic (for format=udlf)"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "format": { "const": "udlf" }
+        }
+      },
+      "then": {
+        "properties": {
+          "detection_content": {
+            "required": ["language", "logic", "es"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "format": { "const": "sigma" }
+        }
+      },
+      "then": {
+        "properties": {
+          "detection_content": {
+            "$ref": "references/sigma-detection-rule-schema.json"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+id: UUID
+title: string
+metadata:
+  created_at: date (YYYY-MM-DD)
+  updated_at: date (YYYY-MM-DD)
+  created_by: string
+  version: semver (e.g., 1.0.0)
+tags:
+  - string
+  - string
+strategy_context:
+  description: string
+strategy_content:
+  - detetion_id: UUID
+    deployment_id: UUID
+  - detetion_id: UUID
+    deployment_id: UUID

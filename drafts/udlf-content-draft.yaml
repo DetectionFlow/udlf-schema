@@ -1,0 +1,37 @@
+id: UUID
+title: string
+format: [udlf, sigma, escu]
+lifecycle: [research, development, testing, deployed, decommissioned]
+type: [ttp, anomaly, baseline, hunting, correlation, other]
+metadata:
+  created_at: date (YYYY-MM-DD)
+  updated_at: date (YYYY-MM-DD)
+  created_by: string
+  version: semver (e.g., 1.0.0)
+  source_url: string
+tags:
+  attack_tactics:
+    - string
+  attack_techniques:
+    - string
+  custom_tags:
+    - string
+detection_context:
+  severity: [critical, high, medium, low, informational]
+  description: string
+  false_positives:
+    - string
+    - string
+  how_to_implement:
+    - string
+    - string
+  investigation_steps:
+    - string
+    - string
+  references:
+    - string
+    - string
+detection_content:
+  language: [spl, spl-es, kql, yara, yara-l, python, sql]
+  logic: string
+  es: string

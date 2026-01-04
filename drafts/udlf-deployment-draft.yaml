@@ -1,0 +1,24 @@
+id: UUID
+title: string
+deployment_format: [splunk, splunk-es, splunk-escu, sentinel]
+metadata:
+  created_at: date (YYYY-MM-DD)
+  updated_at: date (YYYY-MM-DD)
+  created_by: string
+  version: semver (e.g., 1.0.0)
+tags:
+  - string
+  - string
+deployment_context:
+  description: string
+deployment_content:
+  siem_connection:
+    base_url: string
+    token: string
+    app: string
+    owner: string
+    verify_ssl: boolean
+  schedule:
+  action:
+
+  
