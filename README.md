@@ -10,13 +10,10 @@ UDLF provides a vendor-neutral format for representing security detection rules,
 - Detection lifecycle management
 - Cross-platform detection sharing
 
-## Files
-
 | File | Description |
 |------|-------------|
 | `udlf-schema.json` | JSON Schema for UDLF validation |
 | `udlf-specification.md` | Full specification document |
-| `udlf-schema-plan.md` | Schema design rationale |
 
 ## Structure
 

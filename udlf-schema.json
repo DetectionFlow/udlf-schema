@@ -180,7 +180,7 @@
       "then": {
         "properties": {
           "detection_content": {
-            "required": ["language", "logic", "es"]
+            "required": ["language", "logic"]
           }
         }
       }
