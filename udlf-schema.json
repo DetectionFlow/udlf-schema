@@ -194,7 +194,7 @@
       "then": {
         "properties": {
           "detection_content": {
-            "$ref": "references/sigma-detection-rule-schema.json"
+            "$ref": "https://raw.githubusercontent.com/DetectionFlow/udlf-schema/main/references/sigma-detection-rule-schema.json"
           }
         }
       }
