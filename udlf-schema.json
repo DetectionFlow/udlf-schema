@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://detectionflow.io/schemas/udlf/v0.1.0",
+  "$id": "https://detectionflow.com/schemas/udlf/v0.1.0",
   "title": "UDLF Detection Content Schema v0.1.0",
   "description": "Universal Detection Lifecycle Format (UDLF) schema for managing detection content across multiple formats and platforms.",
   "type": "object",

@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../udlf-schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/DetectionFlow/udlf-schema/main/udlf-schema.json
 id: 550e8400-e29b-41d4-a716-446655440000
 title: Detect PowerShell Download Cradle
 format: udlf
@@ -53,4 +53,3 @@ detection_content:
                                "*curl*", "*IEX*", "*Invoke-Expression*")
     | stats count by ComputerName, User, script_block
     | where count > 0
-  es: testing_TODO_ADD_ES_SETTINGS

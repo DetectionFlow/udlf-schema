@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../udlf-schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/DetectionFlow/udlf-schema/main/udlf-schema.json
 id: 7b2c1d3e-4f5a-6b7c-8d9e-0f1a2b3c4d5e
 title: Suspicious Scheduled Task Creation via Schtasks.exe
 format: sigma
@@ -11,7 +11,6 @@ metadata:
   created_by: Detection Engineering Team
   version: "1.0.0"
   source_url: https://github.com/SigmaHQ/sigma/blob/master/rules/windows/process_creation/proc_creation_win_schtasks_creation.yml
-
 
 tags:
   attack_tactics:
