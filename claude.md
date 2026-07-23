@@ -40,8 +40,13 @@ Validate examples with `check-jsonschema` (resolves the remote Sigma `$ref`):
   whose `logic` is an embedded native Sigma object validated against the pinned SigmaHQ schema.
 - **Two independent axes:** `lifecycle` (research → development → testing → live → decommissioned)
   is maturity; a deployment's `mode` (alert | warranty | monitoring | disabled) is runtime behavior.
-- **`deployments`** is an array of `{ target, mode, lifecycle? }` — deploy-neutral policy only,
-  never secrets/mechanics. Per-deployment `lifecycle` inherits the top-level when omitted.
+- **`deployments`** is an array of `{ name?, platform, mode, lifecycle?, schedule?, suppression?,
+  actions?, rba? }`. `platform` (splunk|splunk-es|elastic|sentinel, extensible) is the
+  discriminator — selects the variant + the shape of the Splunk-family config blocks; `name`
+  (listed first) is a friendly endpoint resolved to infra/secrets by the deployer. `rba` is Splunk
+  ES Risk-Based Alerting, paired with the `risk` action. Deploy-neutral **policy** only (schedule/
+  suppression/action-intents/rba), never secrets/mechanics. Per-deployment `lifecycle` inherits
+  the top-level when omitted.
 - **Threat** tagging uses paired `attack: [{ technique, tactics }]` plus `software`/`groups`/`cve`
   and a free-form `custom_tags` dict.
 - Optional blocks: `tests` (framework-based, extensible), `links` (typed relationships),

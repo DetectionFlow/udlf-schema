@@ -78,7 +78,8 @@ links:
     source_version: "2025-10-22"
 
 deployments:
-  - target: sentinel-prod
+  - name: sentinel-prod
+    platform: sentinel
     mode: alert
     lifecycle: live
 

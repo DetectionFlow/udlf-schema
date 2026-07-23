@@ -19,7 +19,7 @@ UDLF provides a vendor-neutral format for representing security detection rules,
 | **Have a threat-hunting team using detection-as-code** | Ad-hoc hunts live as detections with **no `deployments` entry** (run on demand). As a hunt matures it moves along the `lifecycle` axis (`research → development → testing → live`), and an operationalised hunt becomes a scheduled, non-alerting deployment via `mode: monitoring` — all without leaving the format. |
 | **Want to avoid branching your repo for warranty vs. live** | Runtime behavior is the `mode` field (`alert`, `warranty`, `monitoring`, `disabled`) and stage is `lifecycle` — both per-deployment. No parallel branches; a variant goes to warranty or live by changing a value. |
 | **Use a SIEM natively but want DaC benefits** | Author directly in your platform's language (or wrap a Sigma rule) and get lifecycle, testing and deployment management around it. |
-| **Are migrating a SIEM** | Carry logic variants for both the old and new platform in one detection; run the new target in `warranty` while the old stays `live`, then flip when ready. |
+| **Are migrating a SIEM** | Carry logic variants for both the old and new platform in one detection; run the new platform's deployment in `warranty` while the old stays `live`, then flip when ready. |
 | **Are building an internal SIEM** | A deploy-neutral source of truth with a schema to validate against; your deployer translates and pushes content to whatever backend you build. |
 
 | File | Description |

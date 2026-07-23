@@ -26,18 +26,23 @@ array of **deployments**, decoupling *what the logic is* from *where and how it 
 
 ### Deploy-neutral source of truth
 
-UDLF files describe deployment **policy** — which named target, which runtime mode, which
-lifecycle stage. They never contain deployment **mechanics or secrets** (SIEM `base_url`,
-`token`, `app`, `owner`, `verify_ssl`). Those are infrastructure config owned by the platform
-or CI pipeline and resolved from the named `target`. This keeps content files safe to share
-and portable across environments.
+UDLF files describe deployment **policy** — which platform, which named endpoint, which runtime
+mode, which lifecycle stage, and platform-specific policy such as `schedule`/`suppression`/`actions`.
+They never contain deployment **mechanics or secrets** (SIEM `base_url`, `token`, `app`, `owner`,
+`verify_ssl`, or action endpoints/credentials). Those are infrastructure config owned by the
+platform or CI pipeline and resolved from the named endpoint. This keeps content files safe to
+share and portable across environments.
 
 ### The deployer
 
 UDLF describes intent; a **deployer** (an AI agent, deterministic code, or a CI/CD pipeline)
-acts on it. Given a deployment's `target`, the deployer resolves the real infrastructure,
-selects the matching logic variant (e.g. `splunk-es` → the `spl` variant), translates or
-compiles as needed, and pushes it in the requested `mode`.
+acts on it. Given a deployment's `platform` (and optional `name`), the deployer resolves the real
+infrastructure and secrets for that endpoint, selects the matching logic variant
+(e.g. `platform: splunk-es` → the `spl` variant), translates or compiles as needed, and pushes it
+in the requested `mode` with any `schedule` / `suppression` / `actions`. The `deployments` block is
+a **directive**: UDLF says *what* to deploy and *how it should behave*; the deployer — per-org
+custom code or example scripts — turns that into a real pipeline. Engineers (human or AI) can read
+the YAML and see exactly what is deployed where.
 
 ### Two independent axes: lifecycle and mode
 
@@ -156,10 +161,19 @@ links:                                            # typed relationships (loose)
     target: 550e8400-e29b-41d4-a716-446655440000
 
 deployments:                                      # where + how it runs
-  - target: splunk-es                             # named env, NO secrets
+  - name: splunk-prod                             # friendly endpoint; NO secrets here
+    platform: splunk-es                           # discriminator: variant + config shape
     mode: alert
     lifecycle: live                               # overrides top-level
-  - target: sentinel-prod
+    schedule: { frequency: "*/10 * * * *", lookback: "-15m" }
+    suppression: { fields: [dest, SourceImage], window: "24h" }
+    actions: [notable, risk]                      # intents only
+    rba:                                          # Splunk ES Risk-Based Alerting (pairs with `risk`)
+      risk_score: 70
+      risk_objects: [{ field: dest, type: system }]
+      threat_objects: [{ field: SourceImage, type: process }]
+  - name: sentinel-prod
+    platform: sentinel
     mode: warranty                                # lifecycle omitted -> inherits `testing`
 
 changelog:                                        # top-level, last: append-only, grows unbounded
@@ -207,7 +221,7 @@ A **light-touch**, append-only history of notable changes. It is a **top-level**
 **last** in the file, since it grows unbounded and should not push the logic and threat context
 down. Each entry is `{ date, version, author, summary }` — all four required within an entry. It
 intentionally carries no `kind` enum and no per-deployment attachment: the affected language
-variant or deployment target is named in the `summary` prose. There is no separate `updated_at`;
+variant or deployment platform/endpoint is named in the `summary` prose. There is no separate `updated_at`;
 the **most recent entry's `date`** is the effective last-updated date, and each `version` ties a
 change to the release it shipped in.
 
@@ -272,9 +286,27 @@ or a commit SHA), not the import date.
 
 ### deployments
 
-Each entry binds the detection to a named environment. Requires `target` and `mode`; `lifecycle`
-is optional and inherits the top-level value. Secrets and connection details are **never** here —
-they are resolved from `target` by the deployer/CI.
+Each entry binds the detection to a **platform** and, optionally, a named **endpoint**. Requires
+`platform` and `mode`; `name` and `lifecycle` are optional (`lifecycle` inherits the top-level
+value). Secrets and connection details are **never** here — they resolve from the endpoint by the
+deployer/CI.
+
+| Field | Required | Type | Notes |
+|-------|:---:|------|-------|
+| `name` | | string | Friendly name for a specific endpoint (`splunk-prod`, `splunk-staging`). Resolved to real infra/secrets. Omit when a platform has one endpoint. Listed first so entries read name-then-platform across multiple endpoints. |
+| `platform` | ✓ | string | Target platform type and the **discriminator**. Known: `splunk`, `splunk-es`, `elastic`, `sentinel`. Selects the logic variant and the shape of the platform-specific blocks. Open/extensible — unknown platforms validate on the common fields only. |
+| `mode` | ✓ | enum | `alert` \| `warranty` \| `monitoring` \| `disabled` (see [modes](#two-independent-axes-lifecycle-and-mode)). |
+| `lifecycle` | | enum | Per-deployment stage; inherits top-level when omitted. |
+| `schedule` | | object | `{ frequency (cron), lookback, max_results? }`. Run cadence + window. **Policy.** |
+| `suppression` | | object | `{ fields, window }`. Alert throttling/dedup. **Policy.** |
+| `actions` | | enum[] | Action **intents**: `notable` \| `risk` \| `email` \| `webhook`. Endpoints/tokens resolve from the endpoint — never here. |
+| `rba` | | object | Splunk ES Risk-Based Alerting; pairs with the `risk` action. `{ risk_score, risk_objects: [{field, type}], threat_objects?: [{field, type}] }`. **Policy.** |
+
+`schedule` / `suppression` / `actions` / `rba` are **deployment policy** (they change how the
+detection behaves) and belong in the file; deployment **mechanics** (endpoints, tokens,
+integration IDs) never do. `platform` is the discriminator: today only the Splunk-family shapes are defined, so the
+blocks above are Splunk-shaped and other platforms are pass-through (common fields only).
+Per-platform conditional validation is added as coverage grows.
 
 ## The strategy object
 
@@ -369,12 +401,22 @@ the network.
   descriptive-only and largely derivable from the logic or `detection_context.how_to_implement`.
   Sigma's own `logsource` is retained inside embedded `language: sigma` rules. Revisit if a
   concrete consumer (coverage mapping, data-availability checks) needs it structured.
-- **Per-platform `schedule` / `suppression`** on a deployment (reserved-optional shape:
-  `schedule { frequency, lookback, max_results }`, `suppression { fields, window }`).
+- **Per-platform `schedule` / `suppression` / `actions` shapes** — the Splunk-family shapes are
+  defined; non-Splunk platforms are pass-through until their conditional shapes are added.
+- **Explicit deployment → variant binding** — `platform` narrows the variant (e.g. `splunk-es`
+  → `spl`) but does not fully determine it (Splunk `spl`/`tstats`, Elastic ES\|QL/EQL/KQL). A
+  future optional per-deployment variant/language pointer removes the ambiguity.
+- **Shared / inherited deployment config** (open question) — in practice many or all detections in
+  a repo share the same deployment settings (schedule, suppression, actions), and repeating the
+  block in every file is noise. A contentctl-style model — repo-level defaults that a detection
+  inherits and selectively overrides — is DRY and keeps scheduling consistent. The cost is
+  **self-containment**: a single detection file would no longer fully describe its own deployment
+  behavior, adding indirection for the humans and AI agents that read one file at a time. Held
+  deliberately undecided until real usage shows whether the DRY win outweighs the self-containment
+  cost; if added, inline config stays valid and defaults are a pure convenience layer.
 - **`tests` extensibility** — user-defined test frameworks + schemas, and an AI-execution
   framework (describe commands, an agent runs them).
-- **Structured deployment `target`** and native-schema validation for non-Sigma imports
-  (ESCU/Elastic).
+- **Native-schema validation for non-Sigma imports** (ESCU/Elastic).
 
 ## Resources
 

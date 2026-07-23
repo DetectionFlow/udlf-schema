@@ -301,16 +301,21 @@
     },
     "deployments": {
       "type": "array",
-      "description": "Where and how this detection runs. Each entry binds the detection to a named target with a runtime mode and (optionally) its own lifecycle stage. Deployment mechanics and secrets (base_url, token, app, owner) live in platform/CI config, never here — they are resolved from the named target.",
+      "description": "Where and how this detection runs. Each entry binds the detection to a 'platform' (the discriminator that selects the logic variant and the shape of any platform-specific config) and, optionally, a named endpoint. Deployment mechanics and secrets (base_url, token, app, owner, action endpoints/credentials) live in platform/CI config, never here — they are resolved from the named endpoint.",
       "items": {
         "type": "object",
-        "required": ["target", "mode"],
+        "required": ["platform", "mode"],
         "additionalProperties": false,
         "properties": {
-          "target": {
+          "name": {
             "type": "string",
             "minLength": 1,
-            "description": "Named deployment environment (e.g. splunk-es, sentinel-prod). Resolved to real infrastructure by the deployer; the deployer also selects the matching logic variant by language."
+            "description": "Optional friendly name for a specific endpoint (e.g. splunk-prod, splunk-staging). Resolved by the deployer/CI to real infrastructure and secrets. Omit when there is a single endpoint for the platform. Listed first so entries read name-then-platform when one platform has multiple named endpoints."
+          },
+          "platform": {
+            "type": "string",
+            "description": "Target platform type — the deployment discriminator. Known values: splunk, splunk-es, elastic, sentinel. Selects the logic variant (e.g. splunk-es -> spl) and the shape of the schedule/suppression/actions/rba blocks. Intentionally open/extensible: unknown platforms validate against the common fields only. (Platform-specific conditional validation is Splunk-shaped today; other platforms are added as coverage grows.)",
+            "examples": ["splunk", "splunk-es", "elastic", "sentinel"]
           },
           "mode": {
             "type": "string",
@@ -321,13 +326,109 @@
             "type": "string",
             "enum": ["research", "development", "testing", "live", "decommissioned"],
             "description": "Lifecycle stage of this specific deployment. Inherits the top-level 'lifecycle' when omitted."
+          },
+          "schedule": {
+            "type": "object",
+            "description": "How often the detection runs and the time window it covers. Deployment policy, not mechanics. Splunk-shaped today.",
+            "additionalProperties": false,
+            "properties": {
+              "frequency": {
+                "type": "string",
+                "description": "Run frequency as a cron expression (e.g. \"*/10 * * * *\")."
+              },
+              "lookback": {
+                "type": "string",
+                "description": "Relative search window / earliest time the run covers (e.g. \"-15m\")."
+              },
+              "max_results": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Optional cap on results returned per run."
+              }
+            }
+          },
+          "suppression": {
+            "type": "object",
+            "description": "Alert throttling / dedup policy. Deployment policy, not mechanics.",
+            "additionalProperties": false,
+            "properties": {
+              "fields": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Fields that define a unique alert for throttling."
+              },
+              "window": {
+                "type": "string",
+                "description": "Window during which duplicate alerts are suppressed (e.g. \"24h\")."
+              }
+            }
+          },
+          "actions": {
+            "type": "array",
+            "description": "Alert action intents. Intent only — endpoints, tokens and integration IDs resolve from the named endpoint, never here.",
+            "items": {
+              "type": "string",
+              "enum": ["notable", "risk", "email", "webhook"],
+              "description": "notable = raise an ES notable; risk = contribute to RBA/risk index; email = notify; webhook = call an external integration (endpoint resolved externally)."
+            }
+          },
+          "rba": {
+            "type": "object",
+            "description": "Risk-Based Alerting parameters for Splunk ES. Applies when 'actions' includes 'risk'; defines the risk score contributed and the risk/threat objects the detection annotates. Deployment policy, not mechanics.",
+            "additionalProperties": false,
+            "properties": {
+              "risk_score": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Risk score contributed per risk event."
+              },
+              "risk_objects": {
+                "type": "array",
+                "description": "Entities the risk is attributed to.",
+                "items": {
+                  "type": "object",
+                  "required": ["field", "type"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "description": "Result field holding the risk object (e.g. dest, user)."
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": ["system", "user", "other"],
+                      "description": "Risk object type."
+                    }
+                  }
+                }
+              },
+              "threat_objects": {
+                "type": "array",
+                "description": "Optional threat indicators annotated alongside the risk (e.g. process, file hash, domain).",
+                "items": {
+                  "type": "object",
+                  "required": ["field", "type"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "description": "Result field holding the threat object."
+                    },
+                    "type": {
+                      "type": "string",
+                      "description": "Threat object type (e.g. process, file_name, url, domain)."
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
     },
     "changelog": {
       "type": "array",
-      "description": "Append-only, chronological record of notable changes. Placed last as it grows unbounded. Replaces a separate 'updated_at' — the most recent entry's date is the effective last-updated date, and each entry's 'version' ties a change to the release it shipped in. Reference the affected language variant or deployment target in the summary prose.",
+      "description": "Append-only, chronological record of notable changes. Placed last as it grows unbounded. Replaces a separate 'updated_at' — the most recent entry's date is the effective last-updated date, and each entry's 'version' ties a change to the release it shipped in. Reference the affected language variant or deployment platform/endpoint in the summary prose.",
       "items": {
         "type": "object",
         "required": ["date", "version", "author", "summary"],
