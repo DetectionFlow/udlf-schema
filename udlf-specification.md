@@ -364,23 +364,6 @@ changelog:                                        # top-level, last (same shape 
 | `references` | | string[] (uri) | External reading. |
 | `changelog` | | array | Top-level (placed last); same shape as a detection's `changelog`. |
 
-## Migrating from v0.1
-
-| v0.1 | v0.2 |
-|------|------|
-| `format: udlf\|sigma\|escu` | **Removed.** The variant's `language` is the discriminator; `sigma` is a `language` whose `logic` is an embedded, validated Sigma object. |
-| `detection_content: { language, logic }` (object) | `detection_content: [ { language, logic } ]` (**array** of variants). |
-| `lifecycle: deployed` | `lifecycle: live`. (`warranty`/`tuning` removed — warranty is a `mode`; re-engineering re-enters `development`/`testing`.) |
-| `metadata.created_by` (string) | `metadata.authors` (array). |
-| `metadata.source_url` | A `links: [{ type: derived_from, target, source_version }]` entry. |
-| `metadata.updated_at` | **Removed.** Superseded by a top-level `changelog`; the latest entry's `date` is the effective last-updated date. |
-| `tags.attack_tactics` + `tags.attack_techniques` (flat lists) | `threat.attack: [{ technique, tactics }]` (paired). Plus `threat.software`/`groups`/`cve`. |
-| `tags.custom_tags` (string list) | `threat.custom_tags` (**dict**). |
-| `detection_context` | Unchanged (name retained). |
-| — | New: `tests`, `links`, `deployments`, and the `strategy` object. |
-| `type` | **Removed** in v0.2 (may be reintroduced later). |
-| `risk`/RBA, `drilldowns`, `license`, `confidence`/`impact`, `contributors` | Not included. RBA is re-synthesized at ESCU deploy time. |
-
 ## Validation
 
 ```bash
@@ -394,29 +377,6 @@ uvx check-jsonschema --schemafile udlf-strategy-schema.json examples/strategies/
 The Sigma `$ref` is pinned to an immutable upstream tag
 (`SigmaHQ/sigma-specification` `v2.1.0`); validating a `language: sigma` variant resolves it over
 the network.
-
-## Deferred (post-v0.2)
-
-- **`data` block** (`log_sources`, `required_fields`, `data_sources`) — removed from v0.2 as
-  descriptive-only and largely derivable from the logic or `detection_context.how_to_implement`.
-  Sigma's own `logsource` is retained inside embedded `language: sigma` rules. Revisit if a
-  concrete consumer (coverage mapping, data-availability checks) needs it structured.
-- **Per-platform `schedule` / `suppression` / `actions` shapes** — the Splunk-family shapes are
-  defined; non-Splunk platforms are pass-through until their conditional shapes are added.
-- **Explicit deployment → variant binding** — `platform` narrows the variant (e.g. `splunk-es`
-  → `spl`) but does not fully determine it (Splunk `spl`/`tstats`, Elastic ES\|QL/EQL/KQL). A
-  future optional per-deployment variant/language pointer removes the ambiguity.
-- **Shared / inherited deployment config** (open question) — in practice many or all detections in
-  a repo share the same deployment settings (schedule, suppression, actions), and repeating the
-  block in every file is noise. A contentctl-style model — repo-level defaults that a detection
-  inherits and selectively overrides — is DRY and keeps scheduling consistent. The cost is
-  **self-containment**: a single detection file would no longer fully describe its own deployment
-  behavior, adding indirection for the humans and AI agents that read one file at a time. Held
-  deliberately undecided until real usage shows whether the DRY win outweighs the self-containment
-  cost; if added, inline config stays valid and defaults are a pure convenience layer.
-- **`tests` extensibility** — user-defined test frameworks + schemas, and an AI-execution
-  framework (describe commands, an agent runs them).
-- **Native-schema validation for non-Sigma imports** (ESCU/Elastic).
 
 ## Resources
 
