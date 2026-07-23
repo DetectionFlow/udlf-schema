@@ -1,26 +1,13 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/DetectionFlow/udlf-schema/main/udlf-schema.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.2.0
 id: 550e8400-e29b-41d4-a716-446655440000
 title: Detect PowerShell Download Cradle
-format: udlf
-lifecycle: deployed
-type: ttp
+lifecycle: live
 
 metadata:
   created_at: "2024-01-15"
-  updated_at: "2024-12-30"
-  created_by: Detection Engineering Team
-  version: "1.2.0"
-
-tags:
-  attack_tactics:
-    - Execution
-    - Command and Control
-  attack_techniques:
-    - T1059.001
-    - T1105
-  custom_tags:
-    - hr-team-only
-    - high-confidence
+  version: "1.3.0"
+  authors:
+    - Detection Engineering Team
 
 detection_context:
   severity: high
@@ -35,7 +22,7 @@ detection_context:
   how_to_implement:
     - Enable PowerShell Script Block Logging (Event ID 4104) and Module Logging
     - Ensure Windows PowerShell Operational logs are being collected
-  investigation_steps:
+  investigation_guidance:
     - Review the full script block content for malicious indicators
     - Check the source URL being accessed
     - Identify the user and process that executed the command
@@ -43,13 +30,67 @@ detection_context:
   references:
     - https://lolbas-project.github.io/
 
+threat:
+  attack_version: "19"
+  attack:
+    - technique: T1059.001
+      tactics:
+        - Execution
+    - technique: T1105
+      tactics:
+        - Command and Control
+  custom_tags:
+    domain: endpoint
+    confidence: high
+    audience:
+      - hr-team-only
+
 detection_content:
-  language: spl
-  logic: |
-    index=windows sourcetype=WinEventLog:Microsoft-Windows-PowerShell/Operational
-    | rex field=Message "(?<script_block>(?s).*)"
-    | search script_block IN ("*DownloadString*", "*DownloadFile*", "*Net.WebClient*",
-                               "*Start-BitsTransfer*", "*Invoke-WebRequest*", "*wget*",
-                               "*curl*", "*IEX*", "*Invoke-Expression*")
-    | stats count by ComputerName, User, script_block
-    | where count > 0
+  - language: spl
+    logic: |
+      index=windows sourcetype=WinEventLog:Microsoft-Windows-PowerShell/Operational
+      | rex field=Message "(?<script_block>(?s).*)"
+      | search script_block IN ("*DownloadString*", "*DownloadFile*", "*Net.WebClient*",
+                                 "*Start-BitsTransfer*", "*Invoke-WebRequest*", "*wget*",
+                                 "*curl*", "*IEX*", "*Invoke-Expression*")
+      | stats count by ComputerName, User, script_block
+      | where count > 0
+
+tests:
+  - name: PowerShell download cradle (Atomic Red Team)
+    framework: atomic-red-team
+    technique: T1059.001
+    test_guid: 9c3ad250-b185-4444-b5a9-d69218a10c95
+
+deployments:
+  - name: splunk-prod
+    platform: splunk-es
+    mode: alert
+    lifecycle: live
+    schedule:
+      frequency: "0 * * * *"
+      lookback: "-70m"
+    suppression:
+      fields: [ComputerName, User]
+      window: "1h"
+    rba:                             # required on splunk-es; mode=alert -> notable + risk annotation
+      risk_score: 50
+      risk_objects:
+        - field: ComputerName
+          type: system
+        - field: User
+          type: user
+
+changelog:
+  - date: "2024-01-15"
+    version: "1.0.0"
+    author: Detection Engineering Team
+    summary: Initial SPL download-cradle detection created.
+  - date: "2024-12-30"
+    version: "1.2.0"
+    author: Detection Engineering Team
+    summary: Expanded script-block IN() patterns and documented false-positive scenarios.
+  - date: "2026-07-23"
+    version: "1.3.0"
+    author: Detection Engineering Team
+    summary: Added Splunk deployment schedule, suppression and RBA annotation on the splunk-prod endpoint.

@@ -1,0 +1,48 @@
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/strategy/v0.2.0
+#
+# A strategy groups related detections under an analytic-story narrative.
+# Members are detection references only (by id).
+id: c0ffee00-1234-4abc-9def-000000000001
+title: Defense Evasion via Security Tooling Tampering
+
+metadata:
+  created_at: "2026-06-01"
+  version: "0.2.0"
+  authors:
+    - Detection Engineering Team
+
+narrative:
+  description: |
+    Coverage for adversaries who disable or tamper with endpoint security controls
+    to evade detection, then operate under reduced visibility on the host.
+  goal: Detect the tamper-then-operate pattern across endpoint platforms.
+  threat:
+    attack_version: "19"
+    attack:
+      - technique: T1562.001
+        tactics:
+          - Defense Impairment
+      - technique: T1055
+        tactics:
+          - Stealth
+    groups:
+      - G0016
+    software:
+      - S0154
+
+members:
+  - detection: a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d
+  - detection: 550e8400-e29b-41d4-a716-446655440000
+
+references:
+  - https://attack.mitre.org/tactics/TA0005/
+
+changelog:
+  - date: "2026-06-01"
+    version: "0.1.0"
+    author: Detection Engineering Team
+    summary: Initial strategy grouping the tamper-then-operate detections.
+  - date: "2026-07-20"
+    version: "0.2.0"
+    author: Detection Engineering Team
+    summary: Added the process-injection detection as a member.
