@@ -10,6 +10,18 @@ UDLF provides a vendor-neutral format for representing security detection rules,
 - Detection lifecycle management
 - Cross-platform detection sharing
 
+## Who it's for
+
+| If you… | UDLF gives you… |
+|---------|-----------------|
+| **Use multiple detection formats in one repo** | SPL, KQL, Sigma, YARA-L and more coexist as `language` variants of a single detection. Existing Sigma rules embed and validate natively — no rewrite. |
+| **Run multiple SIEMs / multistep detections that span platforms** | One detection holds per-platform logic variants and a `deployments` array targeting each SIEM independently. **Strategies** group the detections that work together into a single analytic story. |
+| **Have a threat-hunting team using detection-as-code** | The `lifecycle` axis (`research → development → testing → live`) and `monitoring` mode let a hunt mature into a deployed detection without ever leaving the format. |
+| **Want to avoid branching your repo for warranty vs. live** | Runtime behavior is the `mode` field (`alert`, `warranty`, `monitoring`, `disabled`) and stage is `lifecycle` — both per-deployment. No parallel branches; a variant goes to warranty or live by changing a value. |
+| **Use a SIEM natively but want DaC benefits** | Author directly in your platform's language (or wrap a Sigma rule) and get lifecycle, testing and deployment management around it. |
+| **Are migrating a SIEM** | Carry logic variants for both the old and new platform in one detection; run the new target in `warranty` while the old stays `live`, then flip when ready. |
+| **Are building an internal SIEM** | A deploy-neutral source of truth with a schema to validate against; your deployer translates and pushes content to whatever backend you build. |
+
 | File | Description |
 |------|-------------|
 | `udlf-schema.json` | JSON Schema for UDLF detections |

@@ -185,6 +185,11 @@ Discovery, Lateral Movement, Collection, Command and Control, Exfiltration, Impa
 `Defense Evasion` is retained for back-compat and Mobile/ICS; `Stealth` and `Defense Impairment`
 are v19 additions (v19 released 2026-04-28).
 
+When a technique lists **no** `tactics`, applications should treat **all tactics valid for that
+technique** as applicable. When `tactics` are listed, only those specific technique→tactic
+mappings apply. This lets a detection scope a technique (e.g. `T1078` Valid Accounts) to a
+single tactic when the logic only covers that use, while leaving the common case unconstrained.
+
 ### tests
 
 Each entry requires `name` and `framework`. `framework` is intentionally **open/extensible** —
