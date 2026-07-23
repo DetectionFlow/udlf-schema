@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://detectionflow.com/schemas/udlf/strategy/v0.2.0",
+  "title": "UDLF Strategy Schema v0.2.0",
+  "description": "Universal Detection Lifecycle Format (UDLF) strategy schema. A strategy is an analytic-story-style grouping that references multiple detections by id and carries a narrative describing the threat it addresses (e.g. \"Scattered Spider Coverage\", \"Entra ID\").",
+  "type": "object",
+  "required": ["id", "title", "metadata"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for the strategy (UUID v4)."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Human-readable title for the strategy."
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Provenance and versioning metadata.",
+      "required": ["created_at", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "created_at": {
+          "type": "string",
+          "format": "date",
+          "description": "ISO 8601 date the strategy was created (YYYY-MM-DD)."
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date",
+          "description": "ISO 8601 date the strategy was last updated (YYYY-MM-DD)."
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "description": "Semantic version number (e.g. 1.0.0, 2.1.3)."
+        },
+        "authors": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Authors of the strategy."
+        }
+      }
+    },
+    "narrative": {
+      "type": "object",
+      "description": "Analytic-story narrative describing the strategy.",
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "What this strategy covers and why."
+        },
+        "goal": {
+          "type": "string",
+          "description": "The detection/coverage goal of the strategy."
+        },
+        "threat": {
+          "type": "object",
+          "description": "Threat this strategy addresses (self-contained subset of the detection threat model).",
+          "additionalProperties": false,
+          "properties": {
+            "attack_version": {
+              "type": "string",
+              "description": "ATT&CK release this strategy was authored against."
+            },
+            "attack": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["technique"],
+                "additionalProperties": false,
+                "properties": {
+                  "technique": {
+                    "type": "string",
+                    "pattern": "^T[0-9]{4}(\\.[0-9]{3})?$",
+                    "description": "MITRE ATT&CK technique or sub-technique ID."
+                  },
+                  "tactics": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "Reconnaissance",
+                        "Resource Development",
+                        "Initial Access",
+                        "Execution",
+                        "Persistence",
+                        "Privilege Escalation",
+                        "Defense Evasion",
+                        "Stealth",
+                        "Defense Impairment",
+                        "Credential Access",
+                        "Discovery",
+                        "Lateral Movement",
+                        "Collection",
+                        "Command and Control",
+                        "Exfiltration",
+                        "Impact"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "software": {
+              "type": "array",
+              "items": { "type": "string", "pattern": "^S[0-9]{4}$" },
+              "description": "MITRE ATT&CK software IDs."
+            },
+            "groups": {
+              "type": "array",
+              "items": { "type": "string", "pattern": "^G[0-9]{4}$" },
+              "description": "MITRE ATT&CK group IDs."
+            },
+            "cve": {
+              "type": "array",
+              "items": { "type": "string", "pattern": "^CVE-[0-9]{4}-[0-9]{4,}$" },
+              "description": "Related CVE identifiers."
+            },
+            "custom_tags": {
+              "type": "object",
+              "description": "Free-form organizational tags.",
+              "additionalProperties": true
+            }
+          }
+        }
+      }
+    },
+    "members": {
+      "type": "array",
+      "description": "Detections that make up this strategy. Members are detection references only.",
+      "items": {
+        "type": "object",
+        "required": ["detection"],
+        "additionalProperties": false,
+        "properties": {
+          "detection": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of a member detection."
+          }
+        }
+      }
+    },
+    "references": {
+      "type": "array",
+      "items": { "type": "string", "format": "uri" },
+      "description": "External reading URLs."
+    }
+  }
+}

@@ -1,26 +1,29 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/DetectionFlow/udlf-schema/main/udlf-schema.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.2.0
 id: 550e8400-e29b-41d4-a716-446655440000
 title: Detect PowerShell Download Cradle
-format: udlf
-lifecycle: deployed
-type: ttp
+lifecycle: live
 
 metadata:
   created_at: "2024-01-15"
   updated_at: "2024-12-30"
-  created_by: Detection Engineering Team
   version: "1.2.0"
+  authors:
+    - Detection Engineering Team
 
-tags:
-  attack_tactics:
-    - Execution
-    - Command and Control
-  attack_techniques:
-    - T1059.001
-    - T1105
+threat:
+  attack_version: "19"
+  attack:
+    - technique: T1059.001
+      tactics:
+        - Execution
+    - technique: T1105
+      tactics:
+        - Command and Control
   custom_tags:
-    - hr-team-only
-    - high-confidence
+    domain: endpoint
+    confidence: high
+    audience:
+      - hr-team-only
 
 detection_context:
   severity: high
@@ -43,13 +46,34 @@ detection_context:
   references:
     - https://lolbas-project.github.io/
 
+data:
+  log_sources:
+    - "WinEventLog:Microsoft-Windows-PowerShell/Operational"
+  required_fields:
+    - Message
+    - ComputerName
+    - User
+  data_sources:
+    - Script Block Logging
+
 detection_content:
-  language: spl
-  logic: |
-    index=windows sourcetype=WinEventLog:Microsoft-Windows-PowerShell/Operational
-    | rex field=Message "(?<script_block>(?s).*)"
-    | search script_block IN ("*DownloadString*", "*DownloadFile*", "*Net.WebClient*",
-                               "*Start-BitsTransfer*", "*Invoke-WebRequest*", "*wget*",
-                               "*curl*", "*IEX*", "*Invoke-Expression*")
-    | stats count by ComputerName, User, script_block
-    | where count > 0
+  - language: spl
+    logic: |
+      index=windows sourcetype=WinEventLog:Microsoft-Windows-PowerShell/Operational
+      | rex field=Message "(?<script_block>(?s).*)"
+      | search script_block IN ("*DownloadString*", "*DownloadFile*", "*Net.WebClient*",
+                                 "*Start-BitsTransfer*", "*Invoke-WebRequest*", "*wget*",
+                                 "*curl*", "*IEX*", "*Invoke-Expression*")
+      | stats count by ComputerName, User, script_block
+      | where count > 0
+
+tests:
+  - name: PowerShell download cradle (Atomic Red Team)
+    framework: atomic-red-team
+    technique: T1059.001
+    test_guid: 9c3ad250-b185-4444-b5a9-d69218a10c95
+
+deployments:
+  - target: splunk-es
+    mode: alert
+    lifecycle: live

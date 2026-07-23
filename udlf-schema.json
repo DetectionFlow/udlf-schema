@@ -1,203 +1,356 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://detectionflow.com/schemas/udlf/v0.1.0",
-  "title": "UDLF Detection Content Schema v0.1.0",
-  "description": "Universal Detection Lifecycle Format (UDLF) schema for managing detection content across multiple formats and platforms.",
+  "$id": "https://detectionflow.com/schemas/udlf/v0.2.0",
+  "title": "UDLF Detection Schema v0.2.0",
+  "description": "Universal Detection Lifecycle Format (UDLF) detection schema. A detection is one threat-idea that may carry multiple logic variants (each in its own language) and be deployed to multiple named targets, each with its own lifecycle stage and runtime mode. Deployment mechanics and secrets are never stored here — UDLF is the deploy-neutral source of truth.",
   "type": "object",
-  "required": ["id", "title", "format", "lifecycle", "type", "detection_content"],
+  "required": ["id", "title", "lifecycle", "metadata"],
   "additionalProperties": false,
   "properties": {
     "id": {
       "type": "string",
       "format": "uuid",
-      "description": "Unique identifier for the detection content (UUID v4)"
+      "description": "Unique identifier for the detection (UUID v4)."
     },
     "title": {
       "type": "string",
       "minLength": 1,
       "maxLength": 256,
-      "description": "Human-readable title for the detection"
-    },
-    "format": {
-      "type": "string",
-      "enum": ["udlf", "sigma", "escu"],
-      "description": "The detection format/specification being used"
+      "description": "Human-readable title for the detection."
     },
     "lifecycle": {
       "type": "string",
-      "enum": ["research", "development", "testing", "deployed", "decommissioned"],
-      "description": "Current lifecycle stage of the detection"
-    },
-    "type": {
-      "type": "string",
-      "enum": ["ttp", "anomaly", "baseline", "hunting", "correlation", "other"],
-      "description": "The type/category of detection"
+      "enum": ["research", "development", "testing", "live", "decommissioned"],
+      "description": "Overall maturity stage of the detection. Also the pre-deployment default inherited by any deployment that omits its own 'lifecycle'."
     },
     "metadata": {
       "type": "object",
-      "description": "Metadata about the detection content",
+      "description": "Provenance and versioning metadata.",
+      "required": ["created_at", "version"],
       "additionalProperties": false,
       "properties": {
         "created_at": {
           "type": "string",
           "format": "date",
-          "description": "ISO 8601 date when the detection was created (YYYY-MM-DD)"
+          "description": "ISO 8601 date the detection was created (YYYY-MM-DD)."
         },
         "updated_at": {
           "type": "string",
           "format": "date",
-          "description": "ISO 8601 date when the detection was last updated (YYYY-MM-DD)"
-        },
-        "created_by": {
-          "type": "string",
-          "description": "Author or creator of the detection"
+          "description": "ISO 8601 date the detection was last updated (YYYY-MM-DD)."
         },
         "version": {
           "type": "string",
           "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
-          "description": "Semantic version number (e.g., 1.0.0, 2.1.3)"
+          "description": "Semantic version number (e.g. 1.0.0, 2.1.3)."
         },
-        "source_url": {
-          "type": "string",
-          "format": "uri",
-          "description": "URL to the source detection (for linked/referenced content)"
+        "authors": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Authors of the detection."
         }
       }
     },
-    "tags": {
+    "detection_content": {
+      "type": "array",
+      "description": "Detection logic variants. Each entry is one language + its logic. A deployer selects the variant appropriate to a target (e.g. Splunk -> spl). For language 'sigma', 'logic' is an embedded native Sigma rule object validated against the pinned SigmaHQ schema; for every other language 'logic' is the raw query string.",
+      "items": {
+        "type": "object",
+        "required": ["language", "logic"],
+        "additionalProperties": false,
+        "properties": {
+          "language": {
+            "type": "string",
+            "enum": ["spl", "kql", "sigma", "yara", "yara-l", "python", "sql"],
+            "description": "Query language of this logic variant. 'sigma' embeds a native Sigma rule object."
+          },
+          "logic": {
+            "description": "The detection logic. A raw query string for spl/kql/yara/yara-l/python/sql; an embedded native Sigma rule object when language is 'sigma'."
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": ["language"],
+              "properties": { "language": { "const": "sigma" } }
+            },
+            "then": {
+              "properties": {
+                "logic": {
+                  "$ref": "https://raw.githubusercontent.com/SigmaHQ/sigma-specification/v2.1.0/json-schema/sigma-detection-rule-schema.json"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "logic": { "type": "string" }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "threat": {
       "type": "object",
-      "description": "Categorization tags for the detection",
+      "description": "Threat intelligence tagging (MITRE ATT&CK and related).",
       "additionalProperties": false,
       "properties": {
-        "attack_tactics": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "Reconnaissance",
-              "Resource Development",
-              "Initial Access",
-              "Execution",
-              "Persistence",
-              "Privilege Escalation",
-              "Defense Evasion",
-              "Credential Access",
-              "Discovery",
-              "Lateral Movement",
-              "Collection",
-              "Command and Control",
-              "Exfiltration",
-              "Impact"
-            ]
-          },
-          "description": "MITRE ATT&CK Enterprise tactic names"
+        "attack_version": {
+          "type": "string",
+          "description": "ATT&CK release this detection was authored against (e.g. \"19\"). Documents authoring context; does not gate validation."
         },
-        "attack_techniques": {
+        "attack": {
           "type": "array",
+          "description": "Technique-to-tactics pairings.",
           "items": {
-            "type": "string",
-            "pattern": "^T[0-9]{4}(\\.[0-9]{3})?$"
-          },
-          "description": "MITRE ATT&CK technique IDs (e.g., T1059, T1059.001)"
+            "type": "object",
+            "required": ["technique"],
+            "additionalProperties": false,
+            "properties": {
+              "technique": {
+                "type": "string",
+                "pattern": "^T[0-9]{4}(\\.[0-9]{3})?$",
+                "description": "MITRE ATT&CK technique or sub-technique ID (e.g. T1059, T1059.001)."
+              },
+              "tactics": {
+                "type": "array",
+                "description": "Tactics linked to this technique. Additive union enum — forward-tolerant across ATT&CK releases.",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "Reconnaissance",
+                    "Resource Development",
+                    "Initial Access",
+                    "Execution",
+                    "Persistence",
+                    "Privilege Escalation",
+                    "Defense Evasion",
+                    "Stealth",
+                    "Defense Impairment",
+                    "Credential Access",
+                    "Discovery",
+                    "Lateral Movement",
+                    "Collection",
+                    "Command and Control",
+                    "Exfiltration",
+                    "Impact"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "software": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^S[0-9]{4}$" },
+          "description": "MITRE ATT&CK software IDs (e.g. S0111)."
+        },
+        "groups": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^G[0-9]{4}$" },
+          "description": "MITRE ATT&CK group IDs (e.g. G0016)."
+        },
+        "cve": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^CVE-[0-9]{4}-[0-9]{4,}$" },
+          "description": "Related CVE identifiers (e.g. CVE-2021-44228)."
         },
         "custom_tags": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Custom organizational tags"
+          "type": "object",
+          "description": "Free-form organizational tags. Keys and values are unconstrained.",
+          "additionalProperties": true
         }
       }
     },
     "detection_context": {
       "type": "object",
-      "description": "Contextual information about the detection",
+      "description": "Human-facing context about the detection.",
       "additionalProperties": false,
       "properties": {
         "severity": {
           "type": "string",
           "enum": ["critical", "high", "medium", "low", "informational"],
-          "description": "Severity level of the detection"
+          "description": "Severity level of the detection."
         },
         "description": {
           "type": "string",
-          "description": "Detailed description of what the detection identifies"
+          "description": "Detailed description of what the detection identifies."
         },
         "false_positives": {
           "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Known false positive scenarios"
+          "items": { "type": "string" },
+          "description": "Known false-positive scenarios."
         },
         "how_to_implement": {
           "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Step-by-step instructions for implementing the detection."
+          "items": { "type": "string" },
+          "description": "Steps for implementing the detection."
         },
         "investigation_steps": {
           "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Steps for investigating alerts from this detection"
+          "items": { "type": "string" },
+          "description": "Steps for investigating alerts from this detection."
         },
         "references": {
           "type": "array",
-          "items": {
-            "type": "string",
-            "format": "uri"
-          },
-          "description": "Reference URLs for threat research and documentation"
+          "items": { "type": "string", "format": "uri" },
+          "description": "External reading URLs (threat research, documentation)."
         }
       }
     },
-    "detection_content": {
+    "data": {
       "type": "object",
-      "description": "The detection logic content. For udlf: use language+logic. For sigma/escu: paste the native format fields directly.",
+      "description": "Data requirements for the detection.",
+      "additionalProperties": false,
       "properties": {
-        "language": {
-          "type": "string",
-          "enum": ["spl", "kql", "yara", "yara-l", "python", "sql"],
-          "description": "Query language used for the detection logic (for format=udlf)"
+        "log_sources": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Log sources the detection consumes."
         },
-        "logic": {
-          "type": "string",
-          "description": "The detection query/logic (for format=udlf)"
+        "required_fields": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Fields the logic depends on."
+        },
+        "data_sources": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Data sources (e.g. ATT&CK data sources / components)."
         }
       }
-    }
-  },
-  "allOf": [
-    {
-      "if": {
+    },
+    "tests": {
+      "type": "array",
+      "description": "Validation tests. Each entry names a test framework and carries fields appropriate to it. 'framework' is intentionally open/extensible; the three known frameworks (replay, synthetic, atomic-red-team) are validated conditionally.",
+      "items": {
+        "type": "object",
+        "required": ["name", "framework"],
+        "additionalProperties": true,
         "properties": {
-          "format": { "const": "udlf" }
-        }
-      },
-      "then": {
+          "name": {
+            "type": "string",
+            "description": "Human-readable test name."
+          },
+          "framework": {
+            "type": "string",
+            "description": "Test framework. Known values: replay, synthetic, atomic-red-team. Extensible — other values are accepted without framework-specific validation."
+          },
+          "expected": {
+            "type": "string",
+            "enum": ["hit", "miss"],
+            "description": "Optional expected outcome. 'hit' = the detection should fire; 'miss' = benign data must not fire (false-positive test)."
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": ["framework"],
+              "properties": { "framework": { "const": "replay" } }
+            },
+            "then": {
+              "required": ["attack_data"],
+              "properties": {
+                "attack_data": {
+                  "type": "array",
+                  "description": "Recorded logs to replay.",
+                  "items": {
+                    "type": "object",
+                    "required": ["data"],
+                    "properties": {
+                      "data": { "type": "string", "format": "uri", "description": "URL to the recorded log data." },
+                      "source": { "type": "string" },
+                      "sourcetype": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": ["framework"],
+              "properties": { "framework": { "const": "synthetic" } }
+            },
+            "then": {
+              "required": ["log"],
+              "properties": {
+                "log": {
+                  "type": "object",
+                  "description": "Inline synthetic event."
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": ["framework"],
+              "properties": { "framework": { "const": "atomic-red-team" } }
+            },
+            "then": {
+              "required": ["technique", "test_guid"],
+              "properties": {
+                "technique": {
+                  "type": "string",
+                  "pattern": "^T[0-9]{4}(\\.[0-9]{3})?$",
+                  "description": "ATT&CK technique the atomic test exercises."
+                },
+                "test_guid": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Atomic Red Team auto_generated_guid."
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "links": {
+      "type": "array",
+      "description": "Typed relationships to other detections, strategies, or sources. Validated loosely: 'type' and 'target' are required; type-specific fields (e.g. derived_from's source_format/source_id/source_version) are allowed but not enforced.",
+      "items": {
+        "type": "object",
+        "required": ["type", "target"],
+        "additionalProperties": true,
         "properties": {
-          "detection_content": {
-            "required": ["language", "logic"]
+          "type": {
+            "type": "string",
+            "enum": ["derived_from", "supersedes", "superseded_by", "related", "part_of_strategy"],
+            "description": "Relationship type."
+          },
+          "target": {
+            "type": "string",
+            "description": "The related resource, as a UUID or URI."
           }
         }
       }
     },
-    {
-      "if": {
+    "deployments": {
+      "type": "array",
+      "description": "Where and how this detection runs. Each entry binds the detection to a named target with a runtime mode and (optionally) its own lifecycle stage. Deployment mechanics and secrets (base_url, token, app, owner) live in platform/CI config, never here — they are resolved from the named target.",
+      "items": {
+        "type": "object",
+        "required": ["target", "mode"],
+        "additionalProperties": false,
         "properties": {
-          "format": { "const": "sigma" }
-        }
-      },
-      "then": {
-        "properties": {
-          "detection_content": {
-            "$ref": "https://raw.githubusercontent.com/DetectionFlow/udlf-schema/main/references/sigma-detection-rule-schema.json"
+          "target": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Named deployment environment (e.g. splunk-es, sentinel-prod). Resolved to real infrastructure by the deployer; the deployer also selects the matching logic variant by language."
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["alert", "warranty", "monitoring", "disabled"],
+            "description": "Runtime behavior. alert = generates alerts; warranty = runs to validate coverage without alerting; monitoring = low-signal observation; disabled = deployed but not running."
+          },
+          "lifecycle": {
+            "type": "string",
+            "enum": ["research", "development", "testing", "live", "decommissioned"],
+            "description": "Lifecycle stage of this specific deployment. Inherits the top-level 'lifecycle' when omitted."
           }
         }
       }
     }
-  ]
+  }
 }
