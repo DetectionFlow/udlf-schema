@@ -34,11 +34,6 @@
           "format": "date",
           "description": "ISO 8601 date the detection was created (YYYY-MM-DD)."
         },
-        "updated_at": {
-          "type": "string",
-          "format": "date",
-          "description": "ISO 8601 date the detection was last updated (YYYY-MM-DD)."
-        },
         "version": {
           "type": "string",
           "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
@@ -88,6 +83,42 @@
             }
           }
         ]
+      }
+    },
+    "detection_context": {
+      "type": "object",
+      "description": "Human-facing context about the detection.",
+      "additionalProperties": false,
+      "properties": {
+        "severity": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low", "informational"],
+          "description": "Severity level of the detection."
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed description of what the detection identifies."
+        },
+        "false_positives": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Known false-positive scenarios."
+        },
+        "how_to_implement": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Steps for implementing the detection."
+        },
+        "investigation_steps": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Steps for investigating alerts from this detection."
+        },
+        "references": {
+          "type": "array",
+          "items": { "type": "string", "format": "uri" },
+          "description": "External reading URLs (threat research, documentation)."
+        }
       }
     },
     "threat": {
@@ -159,64 +190,6 @@
           "type": "object",
           "description": "Free-form organizational tags. Keys and values are unconstrained.",
           "additionalProperties": true
-        }
-      }
-    },
-    "detection_context": {
-      "type": "object",
-      "description": "Human-facing context about the detection.",
-      "additionalProperties": false,
-      "properties": {
-        "severity": {
-          "type": "string",
-          "enum": ["critical", "high", "medium", "low", "informational"],
-          "description": "Severity level of the detection."
-        },
-        "description": {
-          "type": "string",
-          "description": "Detailed description of what the detection identifies."
-        },
-        "false_positives": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Known false-positive scenarios."
-        },
-        "how_to_implement": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Steps for implementing the detection."
-        },
-        "investigation_steps": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Steps for investigating alerts from this detection."
-        },
-        "references": {
-          "type": "array",
-          "items": { "type": "string", "format": "uri" },
-          "description": "External reading URLs (threat research, documentation)."
-        }
-      }
-    },
-    "data": {
-      "type": "object",
-      "description": "Data requirements for the detection.",
-      "additionalProperties": false,
-      "properties": {
-        "log_sources": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Log sources the detection consumes."
-        },
-        "required_fields": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Fields the logic depends on."
-        },
-        "data_sources": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Data sources (e.g. ATT&CK data sources / components)."
         }
       }
     },
@@ -342,12 +315,43 @@
           "mode": {
             "type": "string",
             "enum": ["alert", "warranty", "monitoring", "disabled"],
-            "description": "Runtime behavior. alert = generates alerts; warranty = runs to validate coverage without alerting; monitoring = low-signal observation; disabled = deployed but not running."
+            "description": "Runtime behavior of this deployment. alert = runs and generates alerts/notables. warranty = runs against known-good/known-bad data to validate coverage; produces a test result, not an alert. monitoring = runs on a schedule and surfaces non-alerting output for human review (dashboards, risk/RBA contribution, hunt-triage queues, situational awareness); does not alert. disabled = present but not executing. Note: an ad-hoc/manual hunt is not a mode — it is a detection with no 'deployments' entry, executed on demand."
           },
           "lifecycle": {
             "type": "string",
             "enum": ["research", "development", "testing", "live", "decommissioned"],
             "description": "Lifecycle stage of this specific deployment. Inherits the top-level 'lifecycle' when omitted."
+          }
+        }
+      }
+    },
+    "changelog": {
+      "type": "array",
+      "description": "Append-only, chronological record of notable changes. Placed last as it grows unbounded. Replaces a separate 'updated_at' — the most recent entry's date is the effective last-updated date, and each entry's 'version' ties a change to the release it shipped in. Reference the affected language variant or deployment target in the summary prose.",
+      "items": {
+        "type": "object",
+        "required": ["date", "version", "author", "summary"],
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "ISO 8601 date of the change (YYYY-MM-DD)."
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+            "description": "Semantic version this change shipped in (e.g. 1.0.0)."
+          },
+          "author": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Who made the change."
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What changed and why. Reference the affected language variant or deployment target here."
           }
         }
       }

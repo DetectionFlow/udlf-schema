@@ -44,5 +44,6 @@ Validate examples with `check-jsonschema` (resolves the remote Sigma `$ref`):
   never secrets/mechanics. Per-deployment `lifecycle` inherits the top-level when omitted.
 - **Threat** tagging uses paired `attack: [{ technique, tactics }]` plus `software`/`groups`/`cve`
   and a free-form `custom_tags` dict.
-- Optional blocks: `data`, `tests` (framework-based, extensible), `links` (typed relationships).
+- Optional blocks: `tests` (framework-based, extensible), `links` (typed relationships),
+  `changelog` (top-level, append-only history: `{ date, version, author, summary }`).
 - A **strategy** groups detections by id under a narrative (`udlf-strategy-schema.json`).

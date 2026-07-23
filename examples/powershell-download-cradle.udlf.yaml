@@ -5,25 +5,9 @@ lifecycle: live
 
 metadata:
   created_at: "2024-01-15"
-  updated_at: "2024-12-30"
   version: "1.2.0"
   authors:
     - Detection Engineering Team
-
-threat:
-  attack_version: "19"
-  attack:
-    - technique: T1059.001
-      tactics:
-        - Execution
-    - technique: T1105
-      tactics:
-        - Command and Control
-  custom_tags:
-    domain: endpoint
-    confidence: high
-    audience:
-      - hr-team-only
 
 detection_context:
   severity: high
@@ -46,15 +30,20 @@ detection_context:
   references:
     - https://lolbas-project.github.io/
 
-data:
-  log_sources:
-    - "WinEventLog:Microsoft-Windows-PowerShell/Operational"
-  required_fields:
-    - Message
-    - ComputerName
-    - User
-  data_sources:
-    - Script Block Logging
+threat:
+  attack_version: "19"
+  attack:
+    - technique: T1059.001
+      tactics:
+        - Execution
+    - technique: T1105
+      tactics:
+        - Command and Control
+  custom_tags:
+    domain: endpoint
+    confidence: high
+    audience:
+      - hr-team-only
 
 detection_content:
   - language: spl
@@ -77,3 +66,13 @@ deployments:
   - target: splunk-es
     mode: alert
     lifecycle: live
+
+changelog:
+  - date: "2024-01-15"
+    version: "1.0.0"
+    author: Detection Engineering Team
+    summary: Initial SPL download-cradle detection created.
+  - date: "2024-12-30"
+    version: "1.2.0"
+    author: Detection Engineering Team
+    summary: Expanded script-block IN() patterns and documented false-positive scenarios.

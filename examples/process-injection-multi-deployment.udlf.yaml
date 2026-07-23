@@ -10,30 +10,10 @@ lifecycle: testing
 
 metadata:
   created_at: "2026-06-10"
-  updated_at: "2026-07-20"
   version: "0.3.0"
   authors:
     - Alex Rivera
     - Detection Engineering Team
-
-threat:
-  attack_version: "19"
-  attack:
-    - technique: T1055
-      tactics:
-        - Stealth
-    - technique: T1562.001
-      tactics:
-        - Defense Impairment
-  software:
-    - S0154
-  groups:
-    - G0016
-  custom_tags:
-    domain: endpoint
-    analytic_story:
-      - Defense Evasion Techniques
-    nist: DE.CM
 
 detection_context:
   severity: high
@@ -53,18 +33,24 @@ detection_context:
     - https://attack.mitre.org/techniques/T1055/
     - https://attack.mitre.org/techniques/T1562/001/
 
-data:
-  log_sources:
-    - Sysmon
-    - "WinEventLog:System"
-  required_fields:
-    - SourceImage
-    - TargetImage
-    - GrantedAccess
-    - service_name
-  data_sources:
-    - Process Access
-    - Service Modification
+threat:
+  attack_version: "19"
+  attack:
+    - technique: T1055
+      tactics:
+        - Stealth
+    - technique: T1562.001
+      tactics:
+        - Defense Impairment
+  software:
+    - S0154
+  groups:
+    - G0016
+  custom_tags:
+    domain: endpoint
+    analytic_story:
+      - Defense Evasion Techniques
+    nist: DE.CM
 
 # Two hand-authored variants. A deployer selects the variant matching each target.
 detection_content:
@@ -120,3 +106,14 @@ deployments:
   - target: sentinel-prod
     mode: warranty
     # lifecycle omitted -> inherits the top-level `testing`
+
+# Append-only history. Latest date is the effective last-updated; version ties a change to a release.
+changelog:
+  - date: "2026-06-10"
+    version: "0.1.0"
+    author: Alex Rivera
+    summary: Initial SPL logic created for the process-injection-then-tamper pattern.
+  - date: "2026-07-20"
+    version: "0.3.0"
+    author: Detection Engineering Team
+    summary: Added KQL variant for sentinel-prod (warranty) and tuned GrantedAccess values.

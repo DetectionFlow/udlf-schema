@@ -46,11 +46,36 @@ Maturity and runtime behavior are separate concerns:
 | Axis | Field | Values | Meaning |
 |------|-------|--------|---------|
 | **Maturity** | `lifecycle` | `research` → `development` → `testing` → `live` → `decommissioned` | How mature the detection (or a specific deployment) is. Re-engineering re-enters `development`/`testing`. |
-| **Runtime** | `mode` | `alert`, `warranty`, `monitoring`, `disabled` | How a deployment behaves once shipped. `warranty` = runs to validate coverage without alerting. |
+| **Runtime** | `mode` | `alert`, `warranty`, `monitoring`, `disabled` | How a deployment behaves once shipped (see below). |
 
 Top-level `lifecycle` is the overall stage **and** the pre-deployment default. Each deployment
 may override `lifecycle` and always sets `mode`; a deployment that omits `lifecycle` inherits
 the top-level value.
+
+The four modes are **orthogonal runtime behaviors** — a deployer acts on each differently:
+
+| mode | behavior |
+|------|----------|
+| `alert` | Runs and generates alerts/notables (pages the SOC). |
+| `warranty` | Runs against known-good/known-bad data to validate coverage; produces a **test result, not an alert**. |
+| `monitoring` | Runs on a schedule and surfaces **non-alerting output for human review** — dashboards, risk/RBA contribution, hunt-triage queues, situational awareness. Does **not** alert. |
+| `disabled` | Present but not executing. |
+
+`mode` is about *behavior*, not *purpose*. A hunting query and a dashboard search that both run
+without alerting are the same `mode: monitoring` — their intent lives in `detection_context` /
+`threat.custom_tags`, not in the runtime enum.
+
+#### Where hunting lives
+
+Threat hunting is **not** a mode. It appears three ways, depending on how the hunt is run:
+
+- **Ad-hoc / manual hunt** — a detection with **no `deployments` entry**. It lives in the repo as
+  logic (e.g. a `hunting/` folder) and is executed on demand. This is the common case and needs no
+  mode at all.
+- **Maturing hunt** — a hunt on its way to becoming a standing detection sits at
+  `lifecycle: research` / `development`, graduating toward `live`.
+- **Operationalised hunt** — a hunt promoted to a scheduled, non-alerting standing search is a
+  deployment with `mode: monitoring`.
 
 ### Multi-variant logic
 
@@ -72,10 +97,18 @@ lifecycle: testing                                # overall stage + pre-deployme
 
 metadata:
   created_at: "2026-06-10"                        # required
-  updated_at: "2026-07-20"
   version: "0.3.0"                                # required, semver
   authors:
     - Alex Rivera
+
+detection_context:
+  severity: high                                  # critical|high|medium|low|informational
+  description: |
+    Detects process injection followed by tampering with endpoint security tooling.
+  false_positives: [EDR agent self-updates]
+  how_to_implement: [Collect Sysmon Event IDs 8, 10]
+  investigation_steps: [Correlate injector with tampered service]
+  references: [https://attack.mitre.org/techniques/T1055/]
 
 threat:
   attack_version: "19"                            # ATT&CK release authored against
@@ -90,20 +123,6 @@ threat:
   custom_tags:                                    # free-form dict, any values
     domain: endpoint
     analytic_story: [Defense Evasion Techniques]
-
-detection_context:
-  severity: high                                  # critical|high|medium|low|informational
-  description: |
-    Detects process injection followed by tampering with endpoint security tooling.
-  false_positives: [EDR agent self-updates]
-  how_to_implement: [Collect Sysmon Event IDs 8, 10]
-  investigation_steps: [Correlate injector with tampered service]
-  references: [https://attack.mitre.org/techniques/T1055/]
-
-data:
-  log_sources: [Sysmon]
-  required_fields: [SourceImage, TargetImage, GrantedAccess]
-  data_sources: [Process Access, Service Modification]
 
 detection_content:                                # array of language+logic variants
   - language: spl
@@ -142,6 +161,16 @@ deployments:                                      # where + how it runs
     lifecycle: live                               # overrides top-level
   - target: sentinel-prod
     mode: warranty                                # lifecycle omitted -> inherits `testing`
+
+changelog:                                        # top-level, last: append-only, grows unbounded
+  - date: "2026-06-10"
+    version: "0.1.0"
+    author: Alex Rivera
+    summary: Initial SPL logic created.
+  - date: "2026-07-20"
+    version: "0.3.0"
+    author: Detection Engineering Team
+    summary: Added KQL variant for sentinel-prod and tuned GrantedAccess values.
 ```
 
 ### Detection field reference
@@ -154,24 +183,45 @@ deployments:                                      # where + how it runs
 | `metadata` | ✓ | object | Provenance/versioning. Requires `created_at` + `version`. |
 | `metadata.created_at` | ✓ | string (date) | `YYYY-MM-DD`. |
 | `metadata.version` | ✓ | string | Semver `^\d+\.\d+\.\d+$`. |
-| `metadata.updated_at` | | string (date) | `YYYY-MM-DD`. |
 | `metadata.authors` | | string[] | Replaces v0.1 `created_by`. |
 | `detection_content` | | array | Logic variants; each `{ language, logic }`. |
 | `detection_content[].language` | ✓* | enum | `spl`\|`kql`\|`sigma`\|`yara`\|`yara-l`\|`python`\|`sql`. |
 | `detection_content[].logic` | ✓* | string \| object | String query, **or** an embedded Sigma object when `language: sigma`. |
+| `detection_context` | | object | Human context (severity, description, false_positives, how_to_implement, investigation_steps, references). |
 | `threat` | | object | ATT&CK and related tagging. |
 | `threat.attack_version` | | string | Authoring release; does not gate validation. |
 | `threat.attack[].technique` | ✓* | string | `^T\d{4}(\.\d{3})?$`. |
 | `threat.attack[].tactics` | | enum[] | Additive union enum (16 values, v18 ∪ v19). |
 | `threat.software` / `groups` / `cve` | | string[] | `^S\d{4}$` / `^G\d{4}$` / `^CVE-\d{4}-\d{4,}$`. |
 | `threat.custom_tags` | | object | Free-form dict; any values. |
-| `detection_context` | | object | Human context (severity, description, false_positives, how_to_implement, investigation_steps, references). |
-| `data` | | object | `log_sources`, `required_fields`, `data_sources` — string arrays. |
 | `tests` | | array | Validation tests; see below. |
 | `links` | | array | Typed relationships; see below. |
 | `deployments` | | array | Where/how it runs; see below. |
+| `changelog` | | array | Top-level (placed last); each `{ date, version, author, summary }`. Latest `date` = effective last-updated. Replaces `updated_at`. |
 
 \* Required only within its parent object when that object is present.
+
+### changelog
+
+A **light-touch**, append-only history of notable changes. It is a **top-level** field placed
+**last** in the file, since it grows unbounded and should not push the logic and threat context
+down. Each entry is `{ date, version, author, summary }` — all four required within an entry. It
+intentionally carries no `kind` enum and no per-deployment attachment: the affected language
+variant or deployment target is named in the `summary` prose. There is no separate `updated_at`;
+the **most recent entry's `date`** is the effective last-updated date, and each `version` ties a
+change to the release it shipped in.
+
+```yaml
+changelog:
+  - date: "2026-06-10"
+    version: "0.1.0"
+    author: Alex Rivera
+    summary: Initial SPL logic created.
+  - date: "2026-07-20"
+    version: "0.3.0"
+    author: Detection Engineering Team
+    summary: Added KQL variant for sentinel-prod and tuned GrantedAccess values.
+```
 
 ### Tactics enum
 
@@ -258,6 +308,16 @@ members:                                          # detection references only
 
 references:
   - https://attack.mitre.org/tactics/TA0005/
+
+changelog:                                        # top-level, last (same shape as a detection's)
+  - date: "2026-06-01"
+    version: "0.1.0"
+    author: Detection Engineering Team
+    summary: Initial strategy grouping the tamper-then-operate detections.
+  - date: "2026-07-20"
+    version: "0.2.0"
+    author: Detection Engineering Team
+    summary: Added the process-injection detection as a member.
 ```
 
 ### Strategy field reference
@@ -270,6 +330,7 @@ references:
 | `narrative` | | object | `description`, `goal`, and a self-contained `threat` subset (same shape as detection `threat`). |
 | `members` | | array | `{ detection: <uuid> }` references only. May be empty. |
 | `references` | | string[] (uri) | External reading. |
+| `changelog` | | array | Top-level (placed last); same shape as a detection's `changelog`. |
 
 ## Migrating from v0.1
 
@@ -280,10 +341,11 @@ references:
 | `lifecycle: deployed` | `lifecycle: live`. (`warranty`/`tuning` removed — warranty is a `mode`; re-engineering re-enters `development`/`testing`.) |
 | `metadata.created_by` (string) | `metadata.authors` (array). |
 | `metadata.source_url` | A `links: [{ type: derived_from, target, source_version }]` entry. |
+| `metadata.updated_at` | **Removed.** Superseded by a top-level `changelog`; the latest entry's `date` is the effective last-updated date. |
 | `tags.attack_tactics` + `tags.attack_techniques` (flat lists) | `threat.attack: [{ technique, tactics }]` (paired). Plus `threat.software`/`groups`/`cve`. |
 | `tags.custom_tags` (string list) | `threat.custom_tags` (**dict**). |
 | `detection_context` | Unchanged (name retained). |
-| — | New: `data`, `tests`, `links`, `deployments`, and the `strategy` object. |
+| — | New: `tests`, `links`, `deployments`, and the `strategy` object. |
 | `type` | **Removed** in v0.2 (may be reintroduced later). |
 | `risk`/RBA, `drilldowns`, `license`, `confidence`/`impact`, `contributors` | Not included. RBA is re-synthesized at ESCU deploy time. |
 
@@ -303,6 +365,10 @@ the network.
 
 ## Deferred (post-v0.2)
 
+- **`data` block** (`log_sources`, `required_fields`, `data_sources`) — removed from v0.2 as
+  descriptive-only and largely derivable from the logic or `detection_context.how_to_implement`.
+  Sigma's own `logsource` is retained inside embedded `language: sigma` rules. Revisit if a
+  concrete consumer (coverage mapping, data-availability checks) needs it structured.
 - **Per-platform `schedule` / `suppression`** on a deployment (reserved-optional shape:
   `schedule { frequency, lookback, max_results }`, `suppression { fields, window }`).
 - **`tests` extensibility** — user-defined test frameworks + schemas, and an AI-execution

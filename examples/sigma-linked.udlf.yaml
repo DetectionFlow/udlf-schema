@@ -5,10 +5,15 @@ lifecycle: live
 
 metadata:
   created_at: "2024-06-01"
-  updated_at: "2024-12-15"
   version: "1.0.0"
   authors:
     - Detection Engineering Team
+
+detection_context:
+  severity: medium
+  description: |
+    Detects suspicious scheduled task creation which may indicate
+    persistence mechanisms being established by threat actors.
 
 threat:
   attack_version: "19"
@@ -16,12 +21,6 @@ threat:
     - technique: T1053.005
       tactics:
         - Persistence
-
-detection_context:
-  severity: medium
-  description: |
-    Detects suspicious scheduled task creation which may indicate
-    persistence mechanisms being established by threat actors.
 
 # language: sigma embeds a native Sigma rule object directly in `logic`.
 # It is validated against the pinned SigmaHQ detection-rule schema.
@@ -82,3 +81,13 @@ deployments:
   - target: sentinel-prod
     mode: alert
     lifecycle: live
+
+changelog:
+  - date: "2024-06-01"
+    version: "1.0.0"
+    author: Detection Engineering Team
+    summary: Wrapped the upstream SigmaHQ schtasks-creation Sigma rule in UDLF for sentinel-prod.
+  - date: "2024-12-15"
+    version: "1.0.0"
+    author: Detection Engineering Team
+    summary: Refreshed the embedded Sigma rule to the upstream 2025-10-22 revision.

@@ -29,11 +29,6 @@
           "format": "date",
           "description": "ISO 8601 date the strategy was created (YYYY-MM-DD)."
         },
-        "updated_at": {
-          "type": "string",
-          "format": "date",
-          "description": "ISO 8601 date the strategy was last updated (YYYY-MM-DD)."
-        },
         "version": {
           "type": "string",
           "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
@@ -151,6 +146,37 @@
       "type": "array",
       "items": { "type": "string", "format": "uri" },
       "description": "External reading URLs."
+    },
+    "changelog": {
+      "type": "array",
+      "description": "Append-only, chronological record of notable changes. Placed last as it grows unbounded. Replaces a separate 'updated_at' — the most recent entry's date is the effective last-updated date, and each entry's 'version' ties a change to the release it shipped in.",
+      "items": {
+        "type": "object",
+        "required": ["date", "version", "author", "summary"],
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "ISO 8601 date of the change (YYYY-MM-DD)."
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+            "description": "Semantic version this change shipped in (e.g. 1.0.0)."
+          },
+          "author": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Who made the change."
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What changed and why."
+          }
+        }
+      }
     }
   }
 }
