@@ -109,10 +109,10 @@
           "items": { "type": "string" },
           "description": "Steps for implementing the detection."
         },
-        "investigation_steps": {
+        "investigation_guidance": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Steps for investigating alerts from this detection."
+          "description": "Guidance for investigating alerts from this detection. Indicative pointers for an analyst or agent, not a rigid step-by-step runbook."
         },
         "references": {
           "type": "array",
@@ -301,7 +301,7 @@
     },
     "deployments": {
       "type": "array",
-      "description": "Where and how this detection runs. Each entry binds the detection to a 'platform' (the discriminator that selects the logic variant and the shape of any platform-specific config) and, optionally, a named endpoint. Deployment mechanics and secrets (base_url, token, app, owner, action endpoints/credentials) live in platform/CI config, never here — they are resolved from the named endpoint.",
+      "description": "Where and how this detection runs. Each entry binds the detection to a 'platform' (the discriminator that selects the logic variant and the shape of any platform-specific config) and, optionally, a named endpoint. Deployment mechanics and secrets (base_url, token, app, owner) live in platform/CI config, never here — they are resolved from the named endpoint.",
       "items": {
         "type": "object",
         "required": ["platform", "mode"],
@@ -314,7 +314,7 @@
           },
           "platform": {
             "type": "string",
-            "description": "Target platform type — the deployment discriminator. Known values: splunk, splunk-es, elastic, sentinel. Selects the logic variant (e.g. splunk-es -> spl) and the shape of the schedule/suppression/actions/rba blocks. Intentionally open/extensible: unknown platforms validate against the common fields only. (Platform-specific conditional validation is Splunk-shaped today; other platforms are added as coverage grows.)",
+            "description": "Target platform type — the deployment discriminator. Known values: splunk, splunk-es, elastic, sentinel. Selects the logic variant (e.g. splunk-es -> spl) and the shape of the schedule/suppression/rba blocks; splunk-es additionally requires an 'rba' block. Intentionally open/extensible: unknown platforms validate against the common fields only. (Platform-specific conditional validation is Splunk-shaped today; other platforms are added as coverage grows.)",
             "examples": ["splunk", "splunk-es", "elastic", "sentinel"]
           },
           "mode": {
@@ -363,18 +363,9 @@
               }
             }
           },
-          "actions": {
-            "type": "array",
-            "description": "Alert action intents. Intent only — endpoints, tokens and integration IDs resolve from the named endpoint, never here.",
-            "items": {
-              "type": "string",
-              "enum": ["notable", "risk", "email", "webhook"],
-              "description": "notable = raise an ES notable; risk = contribute to RBA/risk index; email = notify; webhook = call an external integration (endpoint resolved externally)."
-            }
-          },
           "rba": {
             "type": "object",
-            "description": "Risk-Based Alerting parameters for Splunk ES. Applies when 'actions' includes 'risk'; defines the risk score contributed and the risk/threat objects the detection annotates. Deployment policy, not mechanics.",
+            "description": "Risk-Based Alerting parameters for Splunk ES. Required on every splunk-es deployment; defines the risk score contributed and the risk/threat objects the detection annotates. The 'mode' governs whether a notable is also raised: mode 'alert' raises a notable and the risk annotation, mode 'monitoring' contributes risk only. Deployment policy, not mechanics.",
             "additionalProperties": false,
             "properties": {
               "risk_score": {
@@ -423,7 +414,18 @@
               }
             }
           }
-        }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": ["platform"],
+              "properties": { "platform": { "const": "splunk-es" } }
+            },
+            "then": {
+              "required": ["rba"]
+            }
+          }
+        ]
       }
     },
     "changelog": {

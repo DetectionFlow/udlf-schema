@@ -26,7 +26,7 @@ detection_context:
   how_to_implement:
     - Ensure Sysmon (Event IDs 8, 10) or EDR process-access telemetry is collected
     - Collect Windows Service Control Manager events (7034 / 7036)
-  investigation_steps:
+  investigation_guidance:
     - Correlate the injecting process with the tampered service
     - Review parent process lineage and code-signing status
   references:
@@ -110,8 +110,7 @@ deployments:
     suppression:
       fields: [dest, SourceImage]
       window: "24h"
-    actions: [notable, risk]         # intents only; endpoints/tokens resolved from `name`
-    rba:                             # Risk-Based Alerting (Splunk ES); paired with the `risk` action
+    rba:                             # required on splunk-es; mode=alert -> notable + risk annotation
       risk_score: 70
       risk_objects:
         - field: dest
@@ -138,4 +137,4 @@ changelog:
   - date: "2026-07-23"
     version: "0.4.0"
     author: Detection Engineering Team
-    summary: Added Splunk deployment schedule, suppression, notable/risk actions and RBA annotation on the splunk-prod endpoint.
+    summary: Added Splunk deployment schedule, suppression and RBA annotation on the splunk-prod endpoint.

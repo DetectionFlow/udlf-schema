@@ -27,9 +27,9 @@ array of **deployments**, decoupling *what the logic is* from *where and how it 
 ### Deploy-neutral source of truth
 
 UDLF files describe deployment **policy** — which platform, which named endpoint, which runtime
-mode, which lifecycle stage, and platform-specific policy such as `schedule`/`suppression`/`actions`.
+mode, which lifecycle stage, and platform-specific policy such as `schedule`/`suppression`/`rba`.
 They never contain deployment **mechanics or secrets** (SIEM `base_url`, `token`, `app`, `owner`,
-`verify_ssl`, or action endpoints/credentials). Those are infrastructure config owned by the
+`verify_ssl`). Those are infrastructure config owned by the
 platform or CI pipeline and resolved from the named endpoint. This keeps content files safe to
 share and portable across environments.
 
@@ -39,7 +39,7 @@ UDLF describes intent; a **deployer** (an AI agent, deterministic code, or a CI/
 acts on it. Given a deployment's `platform` (and optional `name`), the deployer resolves the real
 infrastructure and secrets for that endpoint, selects the matching logic variant
 (e.g. `platform: splunk-es` → the `spl` variant), translates or compiles as needed, and pushes it
-in the requested `mode` with any `schedule` / `suppression` / `actions`. The `deployments` block is
+in the requested `mode` with any `schedule` / `suppression` / `rba`. The `deployments` block is
 a **directive**: UDLF says *what* to deploy and *how it should behave*; the deployer — per-org
 custom code or example scripts — turns that into a real pipeline. Engineers (human or AI) can read
 the YAML and see exactly what is deployed where.
@@ -112,7 +112,7 @@ detection_context:
     Detects process injection followed by tampering with endpoint security tooling.
   false_positives: [EDR agent self-updates]
   how_to_implement: [Collect Sysmon Event IDs 8, 10]
-  investigation_steps: [Correlate injector with tampered service]
+  investigation_guidance: [Correlate injector with tampered service]
   references: [https://attack.mitre.org/techniques/T1055/]
 
 threat:
@@ -167,8 +167,7 @@ deployments:                                      # where + how it runs
     lifecycle: live                               # overrides top-level
     schedule: { frequency: "*/10 * * * *", lookback: "-15m" }
     suppression: { fields: [dest, SourceImage], window: "24h" }
-    actions: [notable, risk]                      # intents only
-    rba:                                          # Splunk ES Risk-Based Alerting (pairs with `risk`)
+    rba:                                          # required on splunk-es; mode=alert -> notable + risk
       risk_score: 70
       risk_objects: [{ field: dest, type: system }]
       threat_objects: [{ field: SourceImage, type: process }]
@@ -201,7 +200,7 @@ changelog:                                        # top-level, last: append-only
 | `detection_content` | | array | Logic variants; each `{ language, logic }`. |
 | `detection_content[].language` | ✓* | enum | `spl`\|`kql`\|`sigma`\|`yara`\|`yara-l`\|`python`\|`sql`. |
 | `detection_content[].logic` | ✓* | string \| object | String query, **or** an embedded Sigma object when `language: sigma`. |
-| `detection_context` | | object | Human context (severity, description, false_positives, how_to_implement, investigation_steps, references). |
+| `detection_context` | | object | Human context (severity, description, false_positives, how_to_implement, investigation_guidance, references). |
 | `threat` | | object | ATT&CK and related tagging. |
 | `threat.attack_version` | | string | Authoring release; does not gate validation. |
 | `threat.attack[].technique` | ✓* | string | `^T\d{4}(\.\d{3})?$`. |
@@ -299,13 +298,14 @@ deployer/CI.
 | `lifecycle` | | enum | Per-deployment stage; inherits top-level when omitted. |
 | `schedule` | | object | `{ frequency (cron), lookback, max_results? }`. Run cadence + window. **Policy.** |
 | `suppression` | | object | `{ fields, window }`. Alert throttling/dedup. **Policy.** |
-| `actions` | | enum[] | Action **intents**: `notable` \| `risk` \| `email` \| `webhook`. Endpoints/tokens resolve from the endpoint — never here. |
-| `rba` | | object | Splunk ES Risk-Based Alerting; pairs with the `risk` action. `{ risk_score, risk_objects: [{field, type}], threat_objects?: [{field, type}] }`. **Policy.** |
+| `rba` | ✓ (splunk-es) | object | Splunk ES Risk-Based Alerting. **Required on every `splunk-es` deployment**; optional/unused elsewhere. `{ risk_score, risk_objects: [{field, type}], threat_objects?: [{field, type}] }`. **Policy.** |
 
-`schedule` / `suppression` / `actions` / `rba` are **deployment policy** (they change how the
-detection behaves) and belong in the file; deployment **mechanics** (endpoints, tokens,
-integration IDs) never do. `platform` is the discriminator: today only the Splunk-family shapes are defined, so the
-blocks above are Splunk-shaped and other platforms are pass-through (common fields only).
+`schedule` / `suppression` / `rba` are **deployment policy** (they change how the detection
+behaves) and belong in the file; deployment **mechanics** (endpoints, tokens, integration IDs)
+never do. There is no separate `actions` list — the `mode` already implies the action: on
+`splunk-es`, `mode: alert` raises a notable **and** the risk annotation, while `mode: monitoring`
+contributes risk only. `platform` is the discriminator: today only the Splunk-family shapes are
+defined (and `splunk-es` requires `rba`); other platforms are pass-through (common fields only).
 Per-platform conditional validation is added as coverage grows.
 
 ## The strategy object
