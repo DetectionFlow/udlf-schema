@@ -100,19 +100,20 @@
           "description": "Detailed description of what the detection identifies."
         },
         "false_positives": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Known false-positive scenarios."
+          "type": "string",
+          "description": "Known false-positive scenarios. Free text (multiline)."
         },
-        "how_to_implement": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Steps for implementing the detection."
+        "implementation_guidance": {
+          "type": "string",
+          "description": "How to implement the detection (data sources to collect, prerequisites, tuning). Free text (multiline). Renamed from v0.2.0 'how_to_implement'."
         },
         "investigation_guidance": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Guidance for investigating alerts from this detection. Indicative pointers for an analyst or agent, not a rigid step-by-step runbook."
+          "type": "string",
+          "description": "Guidance for investigating alerts from this detection. Free text (multiline). Indicative pointers for an analyst or agent, not a rigid step-by-step runbook."
+        },
+        "attack_procedures": {
+          "type": "string",
+          "description": "The TTP procedure(s) that trigger this detection — the actual attacker command line(s) or example execution that would cause it to fire. Free text (multiline) for now; may gain structure in a later version."
         },
         "references": {
           "type": "array",
@@ -301,7 +302,7 @@
     },
     "deployments": {
       "type": "array",
-      "description": "Where and how this detection runs. Each entry binds the detection to a 'platform' (the discriminator that selects the logic variant and the shape of any platform-specific config) and, optionally, a named endpoint. Deployment mechanics and secrets (base_url, token, app, owner) live in platform/CI config, never here — they are resolved from the named endpoint.",
+      "description": "Where and how this detection runs. Each entry binds the detection to a 'platform' (the discriminator that selects the logic variant and scopes the free-form 'config' block) and, optionally, a named endpoint. First-class fields are the cross-vendor runtime axes only: platform, mode, optional name/lifecycle. Everything platform-specific (schedule, suppression, rba, vendor round-trip fields) lives in 'config'. Deployment mechanics and secrets (base_url, token, app, owner) live in platform/CI config, never here — they are resolved from the named endpoint.",
       "items": {
         "type": "object",
         "required": ["platform", "mode"],
@@ -314,7 +315,7 @@
           },
           "platform": {
             "type": "string",
-            "description": "Target platform type — the deployment discriminator. Known values: splunk, splunk-es, elastic, sentinel. Selects the logic variant (e.g. splunk-es -> spl) and the shape of the schedule/suppression/rba blocks; splunk-es additionally requires an 'rba' block. Intentionally open/extensible: unknown platforms validate against the common fields only. (Platform-specific conditional validation is Splunk-shaped today; other platforms are added as coverage grows.)",
+            "description": "Target platform type — the deployment discriminator. Known values: splunk, splunk-es, elastic, sentinel. Selects the logic variant (e.g. splunk-es -> spl) and scopes the meaning of the free-form 'config' block. Intentionally open/extensible: unknown platforms validate against the common fields only.",
             "examples": ["splunk", "splunk-es", "elastic", "sentinel"]
           },
           "mode": {
@@ -327,105 +328,12 @@
             "enum": ["research", "development", "testing", "live", "decommissioned"],
             "description": "Lifecycle stage of this specific deployment. Inherits the top-level 'lifecycle' when omitted."
           },
-          "schedule": {
+          "config": {
             "type": "object",
-            "description": "How often the detection runs and the time window it covers. Deployment policy, not mechanics. Splunk-shaped today.",
-            "additionalProperties": false,
-            "properties": {
-              "frequency": {
-                "type": "string",
-                "description": "Run frequency as a cron expression (e.g. \"*/10 * * * *\")."
-              },
-              "lookback": {
-                "type": "string",
-                "description": "Relative search window / earliest time the run covers (e.g. \"-15m\")."
-              },
-              "max_results": {
-                "type": "integer",
-                "minimum": 1,
-                "description": "Optional cap on results returned per run."
-              }
-            }
-          },
-          "suppression": {
-            "type": "object",
-            "description": "Alert throttling / dedup policy. Deployment policy, not mechanics.",
-            "additionalProperties": false,
-            "properties": {
-              "fields": {
-                "type": "array",
-                "items": { "type": "string" },
-                "description": "Fields that define a unique alert for throttling."
-              },
-              "window": {
-                "type": "string",
-                "description": "Window during which duplicate alerts are suppressed (e.g. \"24h\")."
-              }
-            }
-          },
-          "rba": {
-            "type": "object",
-            "description": "Risk-Based Alerting parameters for Splunk ES. Required on every splunk-es deployment; defines the risk score contributed and the risk/threat objects the detection annotates. The 'mode' governs whether a notable is also raised: mode 'alert' raises a notable and the risk annotation, mode 'monitoring' contributes risk only. Deployment policy, not mechanics.",
-            "additionalProperties": false,
-            "properties": {
-              "risk_score": {
-                "type": "integer",
-                "minimum": 0,
-                "description": "Risk score contributed per risk event."
-              },
-              "risk_objects": {
-                "type": "array",
-                "description": "Entities the risk is attributed to.",
-                "items": {
-                  "type": "object",
-                  "required": ["field", "type"],
-                  "additionalProperties": false,
-                  "properties": {
-                    "field": {
-                      "type": "string",
-                      "description": "Result field holding the risk object (e.g. dest, user)."
-                    },
-                    "type": {
-                      "type": "string",
-                      "enum": ["system", "user", "other"],
-                      "description": "Risk object type."
-                    }
-                  }
-                }
-              },
-              "threat_objects": {
-                "type": "array",
-                "description": "Optional threat indicators annotated alongside the risk (e.g. process, file hash, domain).",
-                "items": {
-                  "type": "object",
-                  "required": ["field", "type"],
-                  "additionalProperties": false,
-                  "properties": {
-                    "field": {
-                      "type": "string",
-                      "description": "Result field holding the threat object."
-                    },
-                    "type": {
-                      "type": "string",
-                      "description": "Threat object type (e.g. process, file_name, url, domain)."
-                    }
-                  }
-                }
-              }
-            }
+            "description": "Free-form, platform-scoped deployment configuration. Its meaning is set by the sibling 'platform'; UDLF does not validate its contents (additionalProperties: true) so vendor changes never force a schema bump. Holds deployment policy and vendor round-trip fidelity that UDLF does not model first-class: e.g. for splunk-es, the 'rba' (risk_objects/threat_objects/risk_score/risk_message), 'schedule' (cron/lookback), 'suppression' (fields/window), plus round-trip fields such as drilldown_searches, entities, nes_fields, detection_type, data_source/data_models, and source dates. On import, populate from the vendor export; when authoring new, omit and let the deployer generate what the platform requires. Recommended (non-enforced) per-platform shapes are documented in the specification.",
+            "additionalProperties": true
           }
-        },
-        "allOf": [
-          {
-            "if": {
-              "required": ["platform"],
-              "properties": { "platform": { "const": "splunk-es" } }
-            },
-            "then": {
-              "required": ["rba"]
-            }
-          }
-        ]
+        }
       }
     },
     "changelog": {

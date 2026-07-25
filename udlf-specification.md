@@ -27,7 +27,8 @@ array of **deployments**, decoupling *what the logic is* from *where and how it 
 ### Deploy-neutral source of truth
 
 UDLF files describe deployment **policy** — which platform, which named endpoint, which runtime
-mode, which lifecycle stage, and platform-specific policy such as `schedule`/`suppression`/`rba`.
+mode, which lifecycle stage, and platform-specific policy (`schedule`/`suppression`/`rba` and vendor
+round-trip fields) carried in the free-form per-deployment `config` block.
 They never contain deployment **mechanics or secrets** (SIEM `base_url`, `token`, `app`, `owner`,
 `verify_ssl`). Those are infrastructure config owned by the
 platform or CI pipeline and resolved from the named endpoint. This keeps content files safe to
@@ -39,7 +40,7 @@ UDLF describes intent; a **deployer** (an AI agent, deterministic code, or a CI/
 acts on it. Given a deployment's `platform` (and optional `name`), the deployer resolves the real
 infrastructure and secrets for that endpoint, selects the matching logic variant
 (e.g. `platform: splunk-es` → the `spl` variant), translates or compiles as needed, and pushes it
-in the requested `mode` with any `schedule` / `suppression` / `rba`. The `deployments` block is
+in the requested `mode` with any platform-specific `config` (`schedule` / `suppression` / `rba` / …). The `deployments` block is
 a **directive**: UDLF says *what* to deploy and *how it should behave*; the deployer — per-org
 custom code or example scripts — turns that into a real pipeline. Engineers (human or AI) can read
 the YAML and see exactly what is deployed where.
@@ -110,9 +111,15 @@ detection_context:
   severity: high                                  # critical|high|medium|low|informational
   description: |
     Detects process injection followed by tampering with endpoint security tooling.
-  false_positives: [EDR agent self-updates]
-  how_to_implement: [Collect Sysmon Event IDs 8, 10]
-  investigation_guidance: [Correlate injector with tampered service]
+  false_positives: |                              # free text
+    EDR agent self-updates can trigger CreateRemoteThread on security processes.
+  implementation_guidance: |                      # free text (renamed from how_to_implement)
+    Collect Sysmon Event IDs 8 and 10. Requires GrantedAccess in the event data.
+  investigation_guidance: |                       # free text
+    Correlate the injector process with the tampered service and review parent lineage.
+  attack_procedures: |                            # TTP procedure(s): example attacker execution that fires this
+    C:\tools\injector.exe --pid 4820 --shellcode beacon.bin
+    sc.exe stop SentinelAgent
   references: [https://attack.mitre.org/techniques/T1055/]
 
 threat:
@@ -162,15 +169,16 @@ links:                                            # typed relationships (loose)
 
 deployments:                                      # where + how it runs
   - name: splunk-prod                             # friendly endpoint; NO secrets here
-    platform: splunk-es                           # discriminator: variant + config shape
+    platform: splunk-es                           # discriminator: variant + config meaning
     mode: alert
     lifecycle: live                               # overrides top-level
-    schedule: { frequency: "*/10 * * * *", lookback: "-15m" }
-    suppression: { fields: [dest, SourceImage], window: "24h" }
-    rba:                                          # required on splunk-es; mode=alert -> notable + risk
-      risk_score: 70
-      risk_objects: [{ field: dest, type: system }]
-      threat_objects: [{ field: SourceImage, type: process }]
+    config:                                       # free-form, platform-scoped; UDLF validates nothing here
+      schedule: { frequency: "*/10 * * * *", lookback: "-15m" }
+      suppression: { fields: [dest, SourceImage], window: "24h" }
+      rba:                                        # mode=alert -> notable + risk
+        risk_score: 70
+        risk_objects: [{ field: dest, type: system }]
+        threat_objects: [{ field: SourceImage, type: process }]
   - name: sentinel-prod
     platform: sentinel
     mode: warranty                                # lifecycle omitted -> inherits `testing`
@@ -200,7 +208,14 @@ changelog:                                        # top-level, last: append-only
 | `detection_content` | | array | Logic variants; each `{ language, logic }`. |
 | `detection_content[].language` | ✓* | enum | `spl`\|`kql`\|`sigma`\|`yara`\|`yara-l`\|`python`\|`sql`. |
 | `detection_content[].logic` | ✓* | string \| object | String query, **or** an embedded Sigma object when `language: sigma`. |
-| `detection_context` | | object | Human context (severity, description, false_positives, how_to_implement, investigation_guidance, references). |
+| `detection_context` | | object | Human context (see below). |
+| `detection_context.severity` | | enum | `critical`\|`high`\|`medium`\|`low`\|`informational`. |
+| `detection_context.description` | | string | What the detection identifies. |
+| `detection_context.false_positives` | | string | Known false-positive scenarios. **Free text** (was an array in draft v0.2.0). |
+| `detection_context.implementation_guidance` | | string | How to implement (data sources, prerequisites, tuning). **Free text**. Renamed from `how_to_implement`. |
+| `detection_context.investigation_guidance` | | string | Indicative investigation pointers. **Free text** (was an array). |
+| `detection_context.attack_procedures` | | string | The TTP procedure(s) that trigger the detection — the attacker command line / example execution that would fire it. **Free text**; may gain structure later. |
+| `detection_context.references` | | string[] (uri) | External reading URLs. |
 | `threat` | | object | ATT&CK and related tagging. |
 | `threat.attack_version` | | string | Authoring release; does not gate validation. |
 | `threat.attack[].technique` | ✓* | string | `^T\d{4}(\.\d{3})?$`. |
@@ -287,26 +302,67 @@ or a commit SHA), not the import date.
 
 Each entry binds the detection to a **platform** and, optionally, a named **endpoint**. Requires
 `platform` and `mode`; `name` and `lifecycle` are optional (`lifecycle` inherits the top-level
-value). Secrets and connection details are **never** here — they resolve from the endpoint by the
-deployer/CI.
+value). Everything platform-specific lives in the free-form **`config`** block. Secrets and
+connection details are **never** here — they resolve from the endpoint by the deployer/CI.
 
 | Field | Required | Type | Notes |
 |-------|:---:|------|-------|
 | `name` | | string | Friendly name for a specific endpoint (`splunk-prod`, `splunk-staging`). Resolved to real infra/secrets. Omit when a platform has one endpoint. Listed first so entries read name-then-platform across multiple endpoints. |
-| `platform` | ✓ | string | Target platform type and the **discriminator**. Known: `splunk`, `splunk-es`, `elastic`, `sentinel`. Selects the logic variant and the shape of the platform-specific blocks. Open/extensible — unknown platforms validate on the common fields only. |
-| `mode` | ✓ | enum | `alert` \| `warranty` \| `monitoring` \| `disabled` (see [modes](#two-independent-axes-lifecycle-and-mode)). |
+| `platform` | ✓ | string | Target platform type and the **discriminator**. Known: `splunk`, `splunk-es`, `elastic`, `sentinel`. Selects the logic variant and **scopes the meaning of `config`**. Open/extensible — unknown platforms validate on the common fields only. |
+| `mode` | ✓ | enum | `alert` \| `warranty` \| `monitoring` \| `disabled` (see [modes](#two-independent-axes-lifecycle-and-mode)). The **only** cross-vendor runtime axis. |
 | `lifecycle` | | enum | Per-deployment stage; inherits top-level when omitted. |
-| `schedule` | | object | `{ frequency (cron), lookback, max_results? }`. Run cadence + window. **Policy.** |
-| `suppression` | | object | `{ fields, window }`. Alert throttling/dedup. **Policy.** |
-| `rba` | ✓ (splunk-es) | object | Splunk ES Risk-Based Alerting. **Required on every `splunk-es` deployment**; optional/unused elsewhere. `{ risk_score, risk_objects: [{field, type}], threat_objects?: [{field, type}] }`. **Policy.** |
+| `config` | | object | **Free-form, platform-scoped** (`additionalProperties: true`). Holds all platform-specific deployment policy and vendor round-trip fidelity: `schedule`, `suppression`, `rba`, and vendor-only fields. UDLF validates **nothing** inside it. See recommended shapes below. |
 
-`schedule` / `suppression` / `rba` are **deployment policy** (they change how the detection
-behaves) and belong in the file; deployment **mechanics** (endpoints, tokens, integration IDs)
-never do. There is no separate `actions` list — the `mode` already implies the action: on
-`splunk-es`, `mode: alert` raises a notable **and** the risk annotation, while `mode: monitoring`
-contributes risk only. `platform` is the discriminator: today only the Splunk-family shapes are
-defined (and `splunk-es` requires `rba`); other platforms are pass-through (common fields only).
-Per-platform conditional validation is added as coverage grows.
+Only `platform`, `mode`, and the optional `name`/`lifecycle` are first-class — `mode` is the sole
+cross-vendor runtime axis. Everything else a platform needs — `schedule`, `suppression`, Splunk ES
+`rba`, and vendor round-trip fields — folds into **`config`**, a free-form block whose meaning is
+set by the sibling `platform`. UDLF does **not** validate `config`, so vendor changes never force a
+schema bump.
+
+This makes import and authoring symmetric:
+
+- **Import** from a SIEM export → dump the vendor-meaningful fields into `config` (skip pure display
+  noise and renames). A slightly-lossy import is fine when the deployer can re-generate the dropped
+  fields from source.
+- **Authoring new** → omit `config` entirely. At deploy time, if the platform hard-requires a field
+  that's blank, the **deployer** generates it or asks the user/AI.
+
+There is no separate `actions` list — the `mode` already implies the action: on `splunk-es`,
+`mode: alert` raises a notable **and** the risk annotation (from `config.rba`), while
+`mode: monitoring` contributes risk only.
+
+Deployment **mechanics** (endpoints, tokens, integration IDs) never appear — in `config` or
+anywhere else. `config` is deployment **policy and fidelity**, not secrets.
+
+#### Recommended `config` shapes (non-enforced)
+
+These are conventions, **not** validated by the schema. A deployer and importer that agree on them
+get portability without a per-vendor schema treadmill.
+
+`splunk` / `splunk-es`:
+
+```yaml
+config:
+  schedule:      { frequency: "*/10 * * * *", lookback: "-15m", max_results: 100 }
+  suppression:   { fields: [dest, SourceImage], window: "24h" }
+  rba:                                            # splunk-es Risk-Based Alerting
+    risk_score:    70
+    risk_message:  "Process injection into $dest$ by $SourceImage$"
+    risk_objects:  [{ field: dest, type: system }, { field: user, type: user }]
+    threat_objects: [{ field: SourceImage, type: process }]
+  # --- vendor round-trip fidelity (redeploy an imported ES search faithfully) ---
+  detection_type:     TTP
+  data_source:        [Sysmon EventID 10]
+  data_models:        [Endpoint.Processes]
+  drilldown_searches: [{ name: "View events", search: "index=endpoint ..." }]
+  entities:           [dest, user]
+  nes_fields:         [dest]
+  source_dates:       { creation_date: "2021-03-01", modification_date: "2024-11-12" }
+```
+
+`rba.risk_objects[].type` is **not** enum-constrained here (import carries values like `dest`); the
+deployer interprets it. Other platforms (`elastic`, `sentinel`, …) define their own `config`
+shapes as coverage grows.
 
 ## The strategy object
 
