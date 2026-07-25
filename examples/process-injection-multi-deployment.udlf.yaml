@@ -20,15 +20,19 @@ detection_context:
   description: |
     Detects process injection into a remote process shortly followed by tampering
     with endpoint security tooling (service stop / driver unload) on the same host.
-  false_positives:
-    - EDR agent self-updates that restart protection services
-    - Approved red-team tooling running in a sanctioned test window
-  how_to_implement:
-    - Ensure Sysmon (Event IDs 8, 10) or EDR process-access telemetry is collected
-    - Collect Windows Service Control Manager events (7034 / 7036)
-  investigation_guidance:
-    - Correlate the injecting process with the tampered service
-    - Review parent process lineage and code-signing status
+  false_positives: |
+    EDR agent self-updates that restart protection services, and approved red-team
+    tooling running in a sanctioned test window.
+  implementation_guidance: |
+    Ensure Sysmon (Event IDs 8, 10) or EDR process-access telemetry is collected, and
+    collect Windows Service Control Manager events (7034 / 7036).
+  investigation_guidance: |
+    Correlate the injecting process with the tampered service, and review parent
+    process lineage and code-signing status.
+  attack_procedures: |               # TTP procedure(s): example attacker execution that fires this
+    # Inject into a remote process, then stop the AV service:
+    C:\tools\injector.exe --pid 4820 --shellcode beacon.bin
+    sc.exe stop SentinelAgent
   references:
     - https://attack.mitre.org/techniques/T1055/
     - https://attack.mitre.org/techniques/T1562/001/
@@ -101,23 +105,24 @@ links:
 
 deployments:
   - name: splunk-prod                # friendly endpoint; resolves to infra/secrets in CI
-    platform: splunk-es              # discriminator: selects the spl variant + Splunk config shape
+    platform: splunk-es              # discriminator: selects the spl variant + scopes config
     mode: alert
     lifecycle: live
-    schedule:
-      frequency: "*/10 * * * *"      # cron
-      lookback: "-15m"
-    suppression:
-      fields: [dest, SourceImage]
-      window: "24h"
-    rba:                             # required on splunk-es; mode=alert -> notable + risk annotation
-      risk_score: 70
-      risk_objects:
-        - field: dest
-          type: system
-      threat_objects:
-        - field: SourceImage
-          type: process
+    config:                          # free-form, platform-scoped; UDLF validates nothing here
+      schedule:
+        frequency: "*/10 * * * *"    # cron
+        lookback: "-15m"
+      suppression:
+        fields: [dest, SourceImage]
+        window: "24h"
+      rba:                           # mode=alert -> notable + risk annotation
+        risk_score: 70
+        risk_objects:
+          - field: dest
+            type: system
+        threat_objects:
+          - field: SourceImage
+            type: process
   - name: sentinel-prod
     platform: sentinel
     mode: warranty
