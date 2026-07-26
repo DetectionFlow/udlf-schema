@@ -1,3 +1,9 @@
 .claude
 references
 .DS_Store
+
+# Python — scripts/ runs under `uv run` via shebang, so no venv is committed
+__pycache__/
+*.py[cod]
+.venv/
+.ruff_cache/

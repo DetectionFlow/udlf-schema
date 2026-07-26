@@ -5,10 +5,13 @@ across multiple SIEM platforms. It is a **deploy-neutral source of truth**: a UD
 carries a detection's logic, threat context, tests, relationships and deployment *policy* —
 but never deployment *mechanics or secrets*.
 
-- **Schema (detection):** `udlf-schema.json` — `$id: https://detectionflow.com/schemas/udlf/v0.2.0`
-- **Schema (strategy):** `udlf-strategy-schema.json` — `$id: https://detectionflow.com/schemas/udlf/strategy/v0.2.0`
+- **Schema (detection):** `schemas/udlf/v0.2.0.json` — `$id: https://detectionflow.com/schemas/udlf/v0.2.0`
+- **Schema (strategy):** `schemas/udlf/strategy/v0.2.0.json` — `$id: https://detectionflow.com/schemas/udlf/strategy/v0.2.0`
 - **Draft:** JSON Schema 2020-12
 - **File extension:** `.udlf.yaml`
+
+Every schema's repo path mirrors its `$id` path, so `schemas/` can be served directly at the
+published URLs and old versions stay resolvable alongside new ones.
 
 ## Problem statement
 
@@ -28,7 +31,8 @@ array of **deployments**, decoupling *what the logic is* from *where and how it 
 
 UDLF files describe deployment **policy** — which platform, which named endpoint, which runtime
 mode, which lifecycle stage, and platform-specific policy (`schedule`/`suppression`/`rba` and vendor
-round-trip fields) carried in the free-form per-deployment `config` block.
+round-trip fields) carried in the free-form per-deployment `config` block, whose known shapes are
+described by [optional sub-schemas](#config-sub-schemas-opt-in).
 They never contain deployment **mechanics or secrets** (SIEM `base_url`, `token`, `app`, `owner`,
 `verify_ssl`). Those are infrastructure config owned by the
 platform or CI pipeline and resolved from the named endpoint. This keeps content files safe to
@@ -40,7 +44,10 @@ UDLF describes intent; a **deployer** (an AI agent, deterministic code, or a CI/
 acts on it. Given a deployment's `platform` (and optional `name`), the deployer resolves the real
 infrastructure and secrets for that endpoint, selects the matching logic variant
 (e.g. `platform: splunk-es` → the `spl` variant), translates or compiles as needed, and pushes it
-in the requested `mode` with any platform-specific `config` (`schedule` / `suppression` / `rba` / …). The `deployments` block is
+in the requested `mode` with any platform-specific `config` (`schedule` / `suppression` / `rba` / …).
+`platform` also picks the delivery path: `splunk-es` means the deployer builds and uploads an app
+itself, while `splunk-contentctl` means it emits a contentctl-shaped detection and lets the
+contentctl pipeline do the build. The `deployments` block is
 a **directive**: UDLF says *what* to deploy and *how it should behave*; the deployer — per-org
 custom code or example scripts — turns that into a real pipeline. Engineers (human or AI) can read
 the YAML and see exactly what is deployed where.
@@ -308,10 +315,10 @@ connection details are **never** here — they resolve from the endpoint by the 
 | Field | Required | Type | Notes |
 |-------|:---:|------|-------|
 | `name` | | string | Friendly name for a specific endpoint (`splunk-prod`, `splunk-staging`). Resolved to real infra/secrets. Omit when a platform has one endpoint. Listed first so entries read name-then-platform across multiple endpoints. |
-| `platform` | ✓ | string | Target platform type and the **discriminator**. Known: `splunk`, `splunk-es`, `elastic`, `sentinel`. Selects the logic variant and **scopes the meaning of `config`**. Open/extensible — unknown platforms validate on the common fields only. |
+| `platform` | ✓ | string | Deployment target and the **discriminator**. Known: `splunk`, `splunk-es`, `splunk-contentctl`, `elastic`, `sentinel`. Selects the logic variant and **scopes the meaning of `config`**. Usually a product, but may name a delivery toolchain where that changes the shape of `config` — see [delivery paths](#when-a-platform-is-a-toolchain). Open/extensible — unknown values validate on the common fields only. |
 | `mode` | ✓ | enum | `alert` \| `warranty` \| `monitoring` \| `disabled` (see [modes](#two-independent-axes-lifecycle-and-mode)). The **only** cross-vendor runtime axis. |
 | `lifecycle` | | enum | Per-deployment stage; inherits top-level when omitted. |
-| `config` | | object | **Free-form, platform-scoped** (`additionalProperties: true`). Holds all platform-specific deployment policy and vendor round-trip fidelity: `schedule`, `suppression`, `rba`, and vendor-only fields. UDLF validates **nothing** inside it. See recommended shapes below. |
+| `config` | | object | **Free-form, platform-scoped** (`additionalProperties: true`). Holds all platform-specific deployment policy and vendor round-trip fidelity: `schedule`, `suppression`, `rba`, and vendor-only fields. The core schema validates **nothing** inside it. Optional [config sub-schemas](#config-sub-schemas-opt-in) describe the known shapes and can be applied as a separate pass. |
 
 Only `platform`, `mode`, and the optional `name`/`lifecycle` are first-class — `mode` is the sole
 cross-vendor runtime axis. Everything else a platform needs — `schedule`, `suppression`, Splunk ES
@@ -334,35 +341,132 @@ There is no separate `actions` list — the `mode` already implies the action: o
 Deployment **mechanics** (endpoints, tokens, integration IDs) never appear — in `config` or
 anywhere else. `config` is deployment **policy and fidelity**, not secrets.
 
-#### Recommended `config` shapes (non-enforced)
+#### When a `platform` is a toolchain
 
-These are conventions, **not** validated by the schema. A deployer and importer that agree on them
-get portability without a per-vendor schema treadmill.
+`platform` usually names a product, but its real job is to determine the shape of `config`. Where
+two delivery paths to the same product produce genuinely different config, they get separate
+`platform` values:
 
-`splunk` / `splunk-es`:
+| `platform` | Target | How it gets there |
+|---|---|---|
+| `splunk` | Splunk Enterprise | Deployer builds a custom app and uploads it. Standard `savedsearches.conf` only — no ES features assumed. |
+| `splunk-es` | Splunk Enterprise Security | Same build-and-upload path, plus ES notable events and Risk-Based Alerting. |
+| `splunk-contentctl` | Splunk Enterprise / ES | Deployer emits a contentctl-shaped detection and hands it to the **contentctl** pipeline, which validates, builds and tests the app itself. |
+
+The split is not cosmetic. Under `splunk-contentctl` the config is not a superset of `splunk-es` —
+it is differently shaped, because contentctl owns the build. Its `type`
+(`TTP` | `Anomaly` | `Hunting` | `Correlation`) is the real discriminator: it selects one of the
+five built-in ESCU deployments by name, which supplies the schedule, and it decides whether
+notables and RBA are emitted at all. That is why a `splunk-contentctl` config has no `schedule`
+block, and why `rba` is *forbidden* on `Hunting` and `Correlation` rather than merely optional.
+
+The same detection can carry several of these at once — see
+`examples/process-injection-multi-deployment.udlf.yaml`, which ships one detection to `splunk-es`
+directly and to `splunk-contentctl` as part of a content pack.
+
+#### Not every platform is a scheduled search
+
+The Splunk-family and Sentinel shapes are all "run this query on a schedule". The EDR targets are
+not, and their `config` shapes reflect that:
+
+- **`defender-for-endpoint`** couples frequency to lookback — you pick `1H`/`3H`/`12H`/`24H`/`NRT`
+  and MDE decides the window, so there is no separate lookback field.
+- **`crowdstrike`** schedules with a start/end window rather than a cron, and classifies rules
+  against a tactic vocabulary that mixes ATT&CK ids with proprietary `CST*` values.
+- **`sentinel-one`** has no schedule at all — STAR rules evaluate continuously. A rule is either a
+  single-event match or a correlation of ordered subqueries over a time window.
+
+Two of them can also **act**, not just detect: `defender-for-endpoint.actions` can isolate a
+device, quarantine a file or disable a user, and `sentinel-one.response` can network-quarantine an
+endpoint. UDLF's `mode` enum describes detection behaviour only, so a deployment carrying response
+actions is doing more than its `mode` conveys. Treat those blocks as deployment policy that
+warrants the same review as any other change with blast radius.
+
+#### Config sub-schemas (opt-in)
+
+`config` stays free-form in the core schema, so a vendor change never forces a UDLF bump. The
+known shapes are described by **separate, optional sub-schemas** that you apply as a second,
+explicit pass when you want the block checked:
+
+| `platform` | Sub-schema |
+|---|---|
+| `splunk` | `schemas/udlf/config/splunk/v0.1.0.json` |
+| `splunk-es` | `schemas/udlf/config/splunk-es/v0.1.0.json` |
+| `splunk-contentctl` | `schemas/udlf/config/splunk-contentctl/v0.1.0.json` |
+| `sentinel` | `schemas/udlf/config/sentinel/v0.1.0.json` |
+| `defender-for-endpoint` | `schemas/udlf/config/defender-for-endpoint/v0.1.0.json` |
+| `crowdstrike` | `schemas/udlf/config/crowdstrike/v0.1.0.json` |
+| `sentinel-one` | `schemas/udlf/config/sentinel-one/v0.1.0.json` |
+
+`elastic` remains unmodelled, so its `config` passes through unvalidated for now.
+
+They are **not** `$ref`'d from the core schema. Core validation is unchanged whether or not they
+exist, and a platform with no sub-schema is simply unvalidated rather than rejected — that is the
+escape hatch working as intended.
+
+Each carries its own semver line, versioned independently of UDLF core — hence `v0.1.0` while the
+core schema is at `v0.2.0`. A block may declare which revision it was authored against:
 
 ```yaml
 config:
-  schedule:      { frequency: "*/10 * * * *", lookback: "-15m", max_results: 100 }
-  suppression:   { fields: [dest, SourceImage], window: "24h" }
-  rba:                                            # splunk-es Risk-Based Alerting
-    risk_score:    70
-    risk_message:  "Process injection into $dest$ by $SourceImage$"
-    risk_objects:  [{ field: dest, type: system }, { field: user, type: user }]
-    threat_objects: [{ field: SourceImage, type: process }]
-  # --- vendor round-trip fidelity (redeploy an imported ES search faithfully) ---
-  detection_type:     TTP
-  data_source:        [Sysmon EventID 10]
-  data_models:        [Endpoint.Processes]
-  drilldown_searches: [{ name: "View events", search: "index=endpoint ..." }]
-  entities:           [dest, user]
-  nes_fields:         [dest]
-  source_dates:       { creation_date: "2021-03-01", modification_date: "2024-11-12" }
+  schema: splunk-es::0.1.0   # optional; pins the exact sub-schema revision
 ```
 
-`rba.risk_objects[].type` is **not** enum-constrained here (import carries values like `dest`); the
-deployer interprets it. Other platforms (`elastic`, `sentinel`, …) define their own `config`
-shapes as coverage grows.
+The pin is exact rather than compatible-within-major: pre-1.0 semver makes no compatibility
+promise, so a block pinned to `0.1.0` keeps validating against `0.1.0` after a later revision
+ships. Omit `schema` to validate against the highest revision available.
+
+Because the sub-schemas are opt-in, they are **closed** (`additionalProperties: false`) — you only
+run one when you want strictness, so an unrecognised key is a typo rather than vendor drift. The
+`splunk` and `splunk-es` shapes provide an `advanced` map as the pressure valve for raw
+`savedsearches.conf` keys they do not model. Every shape except
+`splunk-contentctl` provides an `advanced` map as the pressure valve for raw vendor keys it does
+not model. `splunk-contentctl` deliberately has no such escape hatch: contentctl's own models
+forbid extra keys, so an unmodelled field would fail its build anyway.
+
+Every shape leaves out the same things, because UDLF already owns them elsewhere: the query
+(it belongs in `detection_content`), maturity and runtime behaviour (`lifecycle` and `mode`),
+authorship (`metadata.authors`), the set of target endpoints (one deployment entry each), and any
+vendor-assigned rule id — UDLF is desired-state only, so reconciling against what is actually
+deployed stays with the deployer. Plain ATT&CK restatements are dropped in favour of the top-level
+`threat` block; **vendor-proprietary** taxonomies are modelled, because `threat` cannot express
+them — CrowdStrike's `CSTA*` tactics ("AI Powered IOA", "Falcon OverWatch") and MDE's `category`
+are not ATT&CK, and Sentinel spells its tactics its own way (`CommandAndControl`).
+
+One deliberate exception to keeping logic out of `config`: a `sentinel-one` correlation rule's
+`sub_queries` stay in the config block. They are structural parts of the rule definition rather
+than a single logic blob, and no `detection_content` variant can currently express an ordered
+multi-query correlation — see the correlation decision in the v0.3.0 roadmap.
+
+Each sub-schema mirrors what *its own* deployer actually enforces, so they differ where the tools
+differ. Two examples worth knowing about, both of which the schemas will catch:
+
+- **Threat-object types.** `splunk-es` follows the [Splunk RBA type list](https://splunk.github.io/rba/searches/threat_object_types/)
+  (`ip`, `process_name`, `url_domain`, …); contentctl enforces its own shorter, normalised list
+  (`ip_address`, `process`, `domain`, …). The same concept, spelled differently.
+- **Suppression windows.** Splunk accepts days; contentctl accepts seconds, minutes and hours only,
+  so one day must be written `86400s`, `1440m` or `24h`.
+
+Note also that `score` sits on each **risk object**, not on the `rba` block — Splunk ES scores each
+entity independently, and both contentctl and the ES conf keys reflect that.
+
+Fields UDLF already owns never appear in `config`. ATT&CK IDs and CVEs come from the top-level
+`threat` block, implementation and false-positive prose from `detection_context`, tests from the
+top-level `tests` array, and analytic-story membership from a [strategy](#the-strategy-object) —
+contentctl's `analytic_story` is derived from strategy membership at build time, not authored here.
+
+Other platforms (`elastic`, `sentinel`, …) get sub-schemas as coverage grows; until then their
+`config` is carried through unvalidated.
+
+##### Running the opt-in pass
+
+`check-jsonschema` cannot dispatch on the sibling `platform` field, so the repo ships a small
+runner:
+
+```bash
+./scripts/validate-config.py examples/*.udlf.yaml
+./scripts/validate-config.py --strict examples/*.udlf.yaml   # also fail on unmodelled platforms
+```
 
 ## The strategy object
 
@@ -424,10 +528,10 @@ changelog:                                        # top-level, last (same shape 
 
 ```bash
 # Detection examples
-uvx check-jsonschema --schemafile udlf-schema.json examples/*.udlf.yaml
+uvx check-jsonschema --schemafile schemas/udlf/v0.2.0.json examples/*.udlf.yaml
 
 # Strategy examples
-uvx check-jsonschema --schemafile udlf-strategy-schema.json examples/strategies/*.udlf.yaml
+uvx check-jsonschema --schemafile schemas/udlf/strategy/v0.2.0.json examples/strategies/*.udlf.yaml
 ```
 
 The Sigma `$ref` is pinned to an immutable upstream tag

@@ -1,0 +1,288 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://detectionflow.com/schemas/udlf/config/sentinel-one/v0.1.0",
+  "title": "UDLF deployment config — SentinelOne STAR Rules",
+  "description": "Optional, opt-in sub-schema for the `config` block of a UDLF deployment whose `platform` is `sentinel-one`. Covers SentinelOne STAR rules. This is not a scheduled-search platform: STAR rules evaluate continuously, so there is no schedule block, and a rule may carry active-response actions that quarantine an endpoint. The fields UDLF already owns are absent — maturity and runtime behaviour come from `lifecycle` and `mode`, authorship from `metadata.authors`, and each target tenant is its own deployment entry — as are vendor-assigned rule ids, because UDLF is desired-state only. For a `Single Event` rule the S1QL query lives in `detection_content` like any other language. For a `Correlation` rule the subqueries stay here, because they are structural parts of the rule definition rather than one logic blob — the one place logic legitimately leaks into `config`, pending the correlation-primitive decision in the v0.3.0 roadmap. This schema is NOT referenced by the UDLF core schema; apply it separately when you want the block validated.",
+  "type": "object",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "condition": {
+            "properties": {
+              "type": {
+                "const": "Single Event"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        },
+        "required": [
+          "condition"
+        ]
+      },
+      "then": {
+        "properties": {
+          "condition": {
+            "not": {
+              "required": [
+                "correlation"
+              ]
+            }
+          }
+        },
+        "$comment": "A Single Event rule matches one query with no correlation; its S1QL comes from detection_content."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "condition": {
+            "properties": {
+              "type": {
+                "const": "Correlation"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        },
+        "required": [
+          "condition"
+        ]
+      },
+      "then": {
+        "properties": {
+          "condition": {
+            "required": [
+              "correlation"
+            ]
+          }
+        },
+        "$comment": "A Correlation rule is defined entirely by its correlation block."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "condition": {
+            "properties": {
+              "correlation": {
+                "properties": {
+                  "entity": {
+                    "enum": [
+                      "User",
+                      "Ip",
+                      "Endpoint",
+                      "Storyline",
+                      "None"
+                    ]
+                  }
+                },
+                "required": [
+                  "entity"
+                ]
+              }
+            },
+            "required": [
+              "correlation"
+            ]
+          }
+        },
+        "required": [
+          "condition"
+        ]
+      },
+      "then": {
+        "not": {
+          "required": [
+            "response"
+          ]
+        },
+        "$comment": "Active response actions operate on a process, so SentinelOne only permits them on Single Event rules or correlations grouped by the Process entity. The inverse (response is required in those two cases) is left to the deployer, since a partially-authored UDLF config is legitimate."
+      }
+    }
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "pattern": "^sentinel-one::[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "default": "sentinel-one::0.1.0",
+      "description": "Self-identifying sub-schema version for this config block, so this file can version independently of UDLF core."
+    },
+    "details": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional overrides for how the rule presents in SentinelOne. Omit any field to let the deployer take it from the detection.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Rule name. Overrides the detection title for this deployment."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Rule description. Overrides `detection_context.description` for this deployment."
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "Low",
+            "Medium",
+            "High",
+            "Critical"
+          ],
+          "description": "Severity the rule raises with. Overrides `detection_context.severity` for this deployment."
+        },
+        "expiration": {
+          "type": "string",
+          "pattern": "^\\d{4}-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])$",
+          "description": "Expiry date as YYYY-MM-DD, at most six months out from deployment. Rules are Permanent until this is set, at which point SentinelOne treats them as Temporary. Useful for time-boxed campaign or incident rules.",
+          "examples": [
+            "2026-12-31"
+          ]
+        }
+      }
+    },
+    "condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "description": "What the rule matches on. Note that SentinelOne cannot change a rule's condition type after deployment — switching means deleting the rule and deploying a new one, which also means clearing any deployer-held rule id.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "Single Event",
+            "Correlation"
+          ],
+          "description": "`Single Event` alerts on each match of a single query, whose S1QL lives in `detection_content`. `Correlation` groups multiple subqueries around a shared entity over a time window, defined in `correlation` below."
+        },
+        "correlation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "entity",
+            "match_in_order",
+            "time_window",
+            "sub_queries"
+          ],
+          "description": "Correlation rule definition. Required when `type` is `Correlation`.",
+          "properties": {
+            "entity": {
+              "type": "string",
+              "enum": [
+                "Process",
+                "User",
+                "Ip",
+                "Endpoint",
+                "Storyline",
+                "None"
+              ],
+              "description": "Entity that groups matching events. Each maps to a fixed field set: Process = agent.uuid AND src.process.uid; User = any of actor.user.name, src/tgt.process.user, event.login.userName; Ip = any of src/dst endpoint and process ip fields; Endpoint = agent.uuid OR device.uid; Storyline = src.process.storyline.id AND agent.uuid. Only `Process` permits active response actions."
+            },
+            "match_in_order": {
+              "type": "boolean",
+              "default": true,
+              "description": "Require the subqueries to match in the order listed. Set false to match them in any order within the window."
+            },
+            "time_window": {
+              "type": "string",
+              "enum": [
+                "10m",
+                "30m",
+                "1h",
+                "4h",
+                "8h",
+                "12h"
+              ],
+              "description": "Window within which all subqueries must match. SentinelOne accepts only these fixed values."
+            },
+            "sub_queries": {
+              "type": "array",
+              "minItems": 1,
+              "description": "Ordered subqueries making up the correlation. These are rule structure rather than a single logic blob, which is why they live here rather than in `detection_content`.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "query",
+                  "matches_required"
+                ],
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Subquery in S1QL 2.0. Version 1.0 is not supported."
+                  },
+                  "matches_required": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 1,
+                    "description": "How many times this subquery must match within the window."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "cool_off": {
+          "type": "string",
+          "pattern": "^(([1-9][0-9]{0,2}m|1[0-3][0-9]{2}m|14[0-3][0-9]m|1440m)|([1-9]h|1[0-9]h|2[0-4]h))$",
+          "description": "Suppress repeat alerts for this period after the rule fires, from 1m to 1440m or 1h to 24h. Note that mitigation actions set in `response` are NOT applied to suppressed alerts — a long cool-off silently disables response for the duration.",
+          "examples": [
+            "30m",
+            "4h"
+          ]
+        }
+      }
+    },
+    "response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "treat_as_threat",
+        "network_quarantine"
+      ],
+      "description": "Storyline Active Response actions taken when the rule matches. Permitted only on Single Event rules and Process-entity correlations. These actions change endpoint state, so a deployment carrying them is doing more than detecting — consider whether the UDLF deployment `mode` still reflects reality.",
+      "properties": {
+        "treat_as_threat": {
+          "type": [
+            "string",
+            "boolean"
+          ],
+          "enum": [
+            false,
+            "Suspicious",
+            "Malicious"
+          ],
+          "default": false,
+          "description": "Promote the alert to a threat and apply the matching threat policy. `false` leaves it as an alert; `Suspicious` and `Malicious` select the respective policy."
+        },
+        "network_quarantine": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically network-quarantine the alerting endpoint. Reconnection is manual, from the Sentinels page or Endpoint Details."
+        }
+      }
+    },
+    "advanced": {
+      "type": "object",
+      "description": "Escape hatch for SentinelOne API properties this sub-schema does not model. Passed through verbatim, so keys must match the API exactly. Prefer a modelled field where one exists — anything here is unvalidated and invisible to tooling.",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "integer",
+          "boolean"
+        ]
+      }
+    }
+  }
+}

@@ -108,21 +108,64 @@ deployments:
     platform: splunk-es              # discriminator: selects the spl variant + scopes config
     mode: alert
     lifecycle: live
-    config:                          # free-form, platform-scoped; UDLF validates nothing here
+    # Free-form to the UDLF core schema; optionally checked against
+    # schemas/udlf/config/splunk-es/v0.1.0.json as a separate, explicit pass.
+    config:
+      schema: splunk-es::0.1.0
       schedule:
-        frequency: "*/10 * * * *"    # cron
+        cron: "*/10 * * * *"
         lookback: "-15m"
       suppression:
         fields: [dest, SourceImage]
         window: "24h"
-      rba:                           # mode=alert -> notable + risk annotation
-        risk_score: 70
+      notable:                       # mode=alert -> raise a notable...
+        rule_title: "Process injection on $dest$"
+        rule_description: "%description%"
+        nes_fields: [dest]
+        security_domain: endpoint
+      rba:                           # ...and contribute risk
+        message: "Process injection from $SourceImage$ observed on $dest$"
         risk_objects:
           - field: dest
             type: system
+            score: 70
         threat_objects:
           - field: SourceImage
-            type: process
+            # `process_name`, not `process` — splunk-es follows the Splunk RBA
+            # docs list, while contentctl's normalised list spells this `process`.
+            type: process_name
+
+  # Same product, different delivery path: rather than building and uploading an
+  # app, the deployer emits a contentctl-shaped detection and lets the contentctl
+  # pipeline validate, build and test it. `type` is the discriminator — it picks
+  # the ESCU default deployment, so there is no `schedule` block here.
+  - name: escu-content-pack
+    platform: splunk-contentctl
+    mode: alert
+    lifecycle: development
+    config:
+      schema: splunk-contentctl::0.1.0
+      type: TTP                      # -> ESCU Default Configuration TTP: notable + RBA
+      data_source:
+        - Sysmon EventID 8
+      rba:
+        message: "Process injection from $SourceImage$ observed on $dest$"
+        risk_objects:
+          - field: dest
+            type: system
+            score: 70                # contentctl caps risk score at 100
+        threat_objects:
+          - field: SourceImage
+            type: process            # contentctl's spelling of the same concept
+      tags:
+        asset_type: Endpoint
+        security_domain: endpoint
+        product:
+          - Splunk Enterprise Security
+        throttling:
+          fields: [dest, SourceImage]
+          period: 86400s             # contentctl rejects `1d` — s/m/h only
+
   - name: sentinel-prod
     platform: sentinel
     mode: warranty
