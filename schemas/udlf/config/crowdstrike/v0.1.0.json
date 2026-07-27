@@ -12,6 +12,20 @@
       "default": "crowdstrike::0.1.0",
       "description": "Self-identifying sub-schema version for this config block, so this file can version independently of UDLF core."
     },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "informational"
+      ],
+      "description": "Severity for this deployment. **Optional — omit it and the deployer uses `detection_context.severity`.** Set it only to override the detection's severity for this target. Always uses UDLF's own vocabulary, whatever the platform's native scale is, so an author never has to know the vendor spelling; the deployer translates. Maps to Falcon's severity, which takes these same five values title-cased (`high` -> `High`).",
+      "examples": [
+        "high"
+      ]
+    },
     "details": {
       "type": "object",
       "additionalProperties": false,

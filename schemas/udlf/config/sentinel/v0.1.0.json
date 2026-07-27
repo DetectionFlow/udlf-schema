@@ -59,6 +59,20 @@
       "default": "sentinel::0.1.0",
       "description": "Self-identifying sub-schema version for this config block, so this file can version independently of UDLF core."
     },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "informational"
+      ],
+      "description": "Severity for this deployment. **Optional — omit it and the deployer uses `detection_context.severity`.** Set it only to override the detection's severity for this target. Always uses UDLF's own vocabulary, whatever the platform's native scale is, so an author never has to know the vendor spelling; the deployer translates. Maps to `alertDetailsOverride`. Sentinel has no `Critical`, so the deployer collapses `critical` to `High` — set this explicitly if you want a different collapse.",
+      "examples": [
+        "high"
+      ]
+    },
     "template": {
       "type": "object",
       "additionalProperties": false,
@@ -179,16 +193,6 @@
           "type": "string",
           "minLength": 1,
           "description": "Alert description, up to 5000 characters with at most 3 `{{columnName}}` placeholders. Overrides `detection_context.description`. Maps to `alertDetailsOverride.alertDescriptionFormat`."
-        },
-        "severity": {
-          "type": "string",
-          "enum": [
-            "Informational",
-            "Low",
-            "Medium",
-            "High"
-          ],
-          "description": "Severity Sentinel raises the alert with. Overrides `detection_context.severity` for this deployment — modelled here, unlike on Splunk or CrowdStrike, because Sentinel has no `Critical`: a critical detection has to be collapsed to `High` and that decision is worth recording rather than leaving to the deployer. Maps to `alertDetailsOverride`."
         },
         "tactics": {
           "type": "array",

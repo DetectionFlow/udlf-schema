@@ -12,6 +12,20 @@
       "default": "splunk::0.1.0",
       "description": "Self-identifying sub-schema version for this config block. Lets the block declare which revision of the Splunk config shape it was authored against, so this sub-schema can version independently of UDLF core. A Splunk field change bumps this file only, never the core schema."
     },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "informational"
+      ],
+      "description": "Severity for this deployment. **Optional — omit it and the deployer uses `detection_context.severity`.** Set it only to override the detection's severity for this target. Always uses UDLF's own vocabulary, whatever the platform's native scale is, so an author never has to know the vendor spelling; the deployer translates. Maps to savedsearches.conf `alert.severity`, whose scale is numeric — the deployer converts.",
+      "examples": [
+        "high"
+      ]
+    },
     "schedule": {
       "type": "object",
       "description": "When the saved search runs. Supply exactly one of `cron` or `frequency` — `frequency` is authoring sugar that the deployer expands into a cron expression.",

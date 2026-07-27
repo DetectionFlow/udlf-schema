@@ -12,6 +12,20 @@
       "default": "defender-for-endpoint::0.1.0",
       "description": "Self-identifying sub-schema version for this config block, so this file can version independently of UDLF core."
     },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "informational"
+      ],
+      "description": "Severity for this deployment. **Optional — omit it and the deployer uses `detection_context.severity`.** Set it only to override the detection's severity for this target. Always uses UDLF's own vocabulary, whatever the platform's native scale is, so an author never has to know the vendor spelling; the deployer translates. Maps to `detectionAction.alertTemplate.severity`. MDE has no `Critical`, so the deployer collapses `critical` to `High` — set this explicitly if you want a different collapse.",
+      "examples": [
+        "high"
+      ]
+    },
     "scheduling": {
       "type": "string",
       "enum": [
@@ -60,16 +74,6 @@
             "Impact"
           ],
           "description": "MDE threat category for the alert. This is Microsoft's own taxonomy, not ATT&CK — it overlaps tactic names but includes Malware, Ransomware, Unwanted Software and Suspicious Activity, and it determines which techniques the MDE UI will offer. Maps to `detectionAction.alertTemplate.category`."
-        },
-        "severity": {
-          "type": "string",
-          "enum": [
-            "Informational",
-            "Low",
-            "Medium",
-            "High"
-          ],
-          "description": "Severity the alert raises with. Overrides `detection_context.severity` for this deployment — modelled here because MDE has no `Critical`, so a critical detection must be collapsed to `High` and that decision is worth recording. Maps to `detectionAction.alertTemplate.severity`."
         },
         "recommendation": {
           "type": "string",

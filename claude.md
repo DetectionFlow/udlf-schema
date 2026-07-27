@@ -62,11 +62,15 @@ dispatches on the sibling `platform` (check-jsonschema cannot do this):
   rule ids (UDLF is desired-state only). Plain ATT&CK restatements are dropped in favour of
   `threat`; proprietary taxonomies (CrowdStrike `CSTA*`, MDE `category`, Sentinel's tactic
   spelling) are modelled because `threat` can't express them.
-- **`severity` follows one rule: model it only where the platform vocabulary is lossy.** Splunk ES
-  and CrowdStrike carry all five of UDLF's values, so `detection_context.severity` maps straight on
-  (CrowdStrike title-cases) and there is no field in config. Sentinel and MDE have no `Critical`,
-  SentinelOne has no `Informational` — a value must be collapsed, so those three keep a `severity`
-  override to record the choice. Don't "tidy up" the inconsistency; it is the rule working.
+- **`severity` is inherited by default and overridable everywhere.** `detection_context.severity` is
+  the source of truth; every deployment derives from it unless `config.severity` says otherwise.
+  The override is optional, sits at the top of each config, and always uses **UDLF's** vocabulary
+  (`critical|high|medium|low|informational`) rather than the vendor's — an author never needs to
+  know the platform spelling. The **deployer** translates and collapses: Splunk ES takes the five
+  values verbatim, CrowdStrike title-cases, Splunk maps to the numeric `alert.severity`, Sentinel
+  and MDE have no `Critical`, SentinelOne has no `Informational`. Sole exception:
+  `splunk-contentctl` has no override, because contentctl's `Deployment.alert_action.notable`
+  carries only rule_title/rule_description/nes_fields and cannot author a per-detection severity.
 - **Not every platform is a scheduled search.** MDE couples frequency to lookback via a fixed enum;
   CrowdStrike schedules with a start/end window; SentinelOne has no schedule at all. MDE `actions`
   and SentinelOne `response` can isolate/quarantine/disable — `mode` describes detection behaviour

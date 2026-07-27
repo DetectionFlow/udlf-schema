@@ -114,6 +114,20 @@
       "default": "sentinel-one::0.1.0",
       "description": "Self-identifying sub-schema version for this config block, so this file can version independently of UDLF core."
     },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "informational"
+      ],
+      "description": "Severity for this deployment. **Optional — omit it and the deployer uses `detection_context.severity`.** Set it only to override the detection's severity for this target. Always uses UDLF's own vocabulary, whatever the platform's native scale is, so an author never has to know the vendor spelling; the deployer translates. SentinelOne has no `Informational`, so the deployer collapses `informational` to `Low` — set this explicitly if you want a different collapse.",
+      "examples": [
+        "high"
+      ]
+    },
     "details": {
       "type": "object",
       "additionalProperties": false,
@@ -128,16 +142,6 @@
           "type": "string",
           "minLength": 1,
           "description": "Rule description. Overrides `detection_context.description` for this deployment."
-        },
-        "severity": {
-          "type": "string",
-          "enum": [
-            "Low",
-            "Medium",
-            "High",
-            "Critical"
-          ],
-          "description": "Severity the rule raises with. Overrides `detection_context.severity` for this deployment — modelled here because SentinelOne has no `Informational`, so an informational detection must be collapsed to `Low` and that decision is worth recording."
         },
         "expiration": {
           "type": "string",
