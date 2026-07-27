@@ -137,7 +137,7 @@
             "High",
             "Critical"
           ],
-          "description": "Severity the rule raises with. Overrides `detection_context.severity` for this deployment."
+          "description": "Severity the rule raises with. Overrides `detection_context.severity` for this deployment — modelled here because SentinelOne has no `Informational`, so an informational detection must be collapsed to `Low` and that decision is worth recording."
         },
         "expiration": {
           "type": "string",

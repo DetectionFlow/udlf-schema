@@ -15,7 +15,7 @@
     "details": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Correlation rule presentation and classification. `name`, `description` and `severity` override what Falcon would otherwise take from the detection; the rest is rule behaviour.",
+      "description": "Correlation rule presentation and classification. `name` and `description` override what Falcon would otherwise take from the detection; the rest is rule behaviour. There is no `severity` here: Falcon's severity vocabulary is exactly UDLF's five values, so `detection_context.severity` maps straight onto it and the deployer applies it, title-casing on the way out (`high` -> `High`). On import, read it back into `detection_context.severity` rather than into this block.",
       "allOf": [
         {
           "if": {
@@ -206,17 +206,6 @@
           "type": "string",
           "minLength": 1,
           "description": "Rule description in Falcon. Overrides `detection_context.description` for this deployment."
-        },
-        "severity": {
-          "type": "string",
-          "enum": [
-            "Informational",
-            "Low",
-            "Medium",
-            "High",
-            "Critical"
-          ],
-          "description": "Severity Falcon raises the result with. Overrides `detection_context.severity` for this deployment."
         },
         "trigger": {
           "type": "string",

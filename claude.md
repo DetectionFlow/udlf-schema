@@ -62,6 +62,11 @@ dispatches on the sibling `platform` (check-jsonschema cannot do this):
   rule ids (UDLF is desired-state only). Plain ATT&CK restatements are dropped in favour of
   `threat`; proprietary taxonomies (CrowdStrike `CSTA*`, MDE `category`, Sentinel's tactic
   spelling) are modelled because `threat` can't express them.
+- **`severity` follows one rule: model it only where the platform vocabulary is lossy.** Splunk ES
+  and CrowdStrike carry all five of UDLF's values, so `detection_context.severity` maps straight on
+  (CrowdStrike title-cases) and there is no field in config. Sentinel and MDE have no `Critical`,
+  SentinelOne has no `Informational` — a value must be collapsed, so those three keep a `severity`
+  override to record the choice. Don't "tidy up" the inconsistency; it is the rule working.
 - **Not every platform is a scheduled search.** MDE couples frequency to lookback via a fixed enum;
   CrowdStrike schedules with a start/end window; SentinelOne has no schedule at all. MDE `actions`
   and SentinelOne `response` can isolate/quarantine/disable — `mode` describes detection behaviour

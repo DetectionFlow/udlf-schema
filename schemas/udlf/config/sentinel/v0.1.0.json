@@ -188,7 +188,7 @@
             "Medium",
             "High"
           ],
-          "description": "Severity to raise the alert with. Overrides `detection_context.severity` for this deployment."
+          "description": "Severity Sentinel raises the alert with. Overrides `detection_context.severity` for this deployment — modelled here, unlike on Splunk or CrowdStrike, because Sentinel has no `Critical`: a critical detection has to be collapsed to `High` and that decision is worth recording rather than leaving to the deployer. Maps to `alertDetailsOverride`."
         },
         "tactics": {
           "type": "array",

@@ -69,7 +69,7 @@
             "Medium",
             "High"
           ],
-          "description": "Severity the alert raises with. Overrides `detection_context.severity` for this deployment. Maps to `detectionAction.alertTemplate.severity`."
+          "description": "Severity the alert raises with. Overrides `detection_context.severity` for this deployment — modelled here because MDE has no `Critical`, so a critical detection must be collapsed to `High` and that decision is worth recording. Maps to `detectionAction.alertTemplate.severity`."
         },
         "recommendation": {
           "type": "string",
