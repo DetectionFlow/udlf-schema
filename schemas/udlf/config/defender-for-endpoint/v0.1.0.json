@@ -1,0 +1,416 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://detectionflow.com/schemas/udlf/config/defender-for-endpoint/v0.1.0",
+  "title": "UDLF deployment config — Microsoft Defender for Endpoint",
+  "description": "Optional, opt-in sub-schema for the `config` block of a UDLF deployment whose `platform` is `defender-for-endpoint`. Covers Microsoft Defender for Endpoint custom detection rules: schedule, alert presentation, impacted-entity mapping, response actions and device scoping. The KQL query is not here — it lives in `detection_content` like any other language variant. Neither are the fields UDLF already owns: maturity and runtime behaviour come from `lifecycle` and `mode`, authorship from `metadata.authors`, and each target tenant is its own deployment entry. Vendor-assigned rule ids are absent too, because UDLF is desired-state only — reconciling against what is actually deployed is the deployer's job. ATT&CK techniques come from the top-level `threat` block, but `alert.category` is modelled here: it is MDE's own threat taxonomy, not ATT&CK, and it gates which techniques the UI offers. Note that `actions` can isolate devices, quarantine files and disable users, so a deployment carrying them is doing more than detecting — check the UDLF deployment `mode` still reflects reality. Every field notes the MDE API property it maps to. This schema is NOT referenced by the UDLF core schema; apply it separately when you want the block validated.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "type": "string",
+      "pattern": "^defender-for-endpoint::[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "default": "defender-for-endpoint::0.1.0",
+      "description": "Self-identifying sub-schema version for this config block, so this file can version independently of UDLF core."
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "informational"
+      ],
+      "description": "Severity for this deployment. **Optional — omit it and the deployer uses `detection_context.severity`.** Set it only to override the detection's severity for this target. Always uses UDLF's own vocabulary, whatever the platform's native scale is, so an author never has to know the vendor spelling; the deployer translates. Maps to `detectionAction.alertTemplate.severity`. MDE has no `Critical`, so the deployer collapses `critical` to `High` — set this explicitly if you want a different collapse.",
+      "examples": [
+        "high"
+      ]
+    },
+    "scheduling": {
+      "type": "string",
+      "enum": [
+        "NRT",
+        "1H",
+        "3H",
+        "12H",
+        "24H"
+      ],
+      "description": "How often the query runs. MDE couples frequency to lookback rather than letting you set them separately: 24H checks the past 30 days, 12H the past 48 hours, 3H the past 12 hours, 1H the past 4 hours, and NRT evaluates events continuously as they are ingested. NRT is supported only for specific tables and columns. Maps to `schedule`."
+    },
+    "alert": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "How the alert presents when the rule fires. Title, description and severity override what the deployer would otherwise take from the detection. Maps to `detectionAction.alertTemplate`.",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Alert name. Overrides the detection title for this deployment. Maps to `detectionAction.alertTemplate.title`."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Alert description giving analysts context on the threat. Overrides `detection_context.description`. Maps to `detectionAction.alertTemplate.description`."
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "Command And Control",
+            "Lateral Movement",
+            "Malware",
+            "Persistence",
+            "Privilege Escalation",
+            "Ransomware",
+            "Suspicious Activity",
+            "Unwanted Software",
+            "Exploit",
+            "Initial Access",
+            "Execution",
+            "Exfiltration",
+            "Collection",
+            "Credential Access",
+            "Defense Evasion",
+            "Discovery",
+            "Impact"
+          ],
+          "description": "MDE threat category for the alert. This is Microsoft's own taxonomy, not ATT&CK — it overlaps tactic names but includes Malware, Ransomware, Unwanted Software and Suspicious Activity, and it determines which techniques the MDE UI will offer. Maps to `detectionAction.alertTemplate.category`."
+        },
+        "recommendation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Recommended response steps shown with the alert. Maps to `detectionAction.alertTemplate.recommendation`."
+        }
+      }
+    },
+    "impacted_entities": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Which query columns identify the affected assets. MDE uses these to build incidents and drive automation, so at least one of device, mailbox or user must be supplied. Each value must be a column present in the query results. Maps to `detectionAction.alertTemplate.impactedAssets`.",
+      "anyOf": [
+        {
+          "required": [
+            "device"
+          ]
+        },
+        {
+          "required": [
+            "mailbox"
+          ]
+        },
+        {
+          "required": [
+            "user"
+          ]
+        }
+      ],
+      "properties": {
+        "device": {
+          "type": "string",
+          "enum": [
+            "DeviceId",
+            "DeviceName",
+            "RemoteDeviceName",
+            "TargetDeviceName",
+            "DestinationDeviceName"
+          ],
+          "description": "Query column identifying the affected device."
+        },
+        "mailbox": {
+          "type": "string",
+          "enum": [
+            "AccountUpn",
+            "FileOwnerUpn",
+            "InitiatingProcessAccountUpn",
+            "LastModifyingAccountUpn",
+            "TargetAccountUpn",
+            "SenderFromAddress",
+            "SenderDisplayName",
+            "RecipientEmailAddress",
+            "SenderMailFromAddress"
+          ],
+          "description": "Query column identifying the affected mailbox."
+        },
+        "user": {
+          "type": "string",
+          "enum": [
+            "AccountObjectId",
+            "AccountSid",
+            "AccountUpn",
+            "AccountName",
+            "AccountDomain",
+            "AccountId",
+            "RequestAccountSid",
+            "RequestAccountName",
+            "RequestAccountDomain",
+            "RecipientObjectId",
+            "ProcessAccountObjectId",
+            "InitiatingAccountSid",
+            "InitiatingProcessAccountUpn",
+            "InitiatingAccountName",
+            "InitiatingAccountDomain",
+            "ServicePrincipalId",
+            "ServicePrincipalName",
+            "TargetAccountUpn"
+          ],
+          "description": "Query column identifying the affected user."
+        }
+      }
+    },
+    "actions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Automated response actions taken on entities found by the query. These change endpoint, file and identity state — isolation, quarantine and account disablement are disruptive and hard to reverse at scale, so treat them as deployment policy that warrants review. Maps to `detectionAction.responseActions`.",
+      "properties": {
+        "devices": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Actions applied to devices found by the query.",
+          "properties": {
+            "isolate_device": {
+              "type": "string",
+              "enum": [
+                "Full",
+                "Selective"
+              ],
+              "description": "Network-isolate the device. `Full` cuts off every application and service; `Selective` leaves a limited set reachable. Maps to `detectionAction.responseActions[isolateDeviceResponseAction]`."
+            },
+            "collect_investigation_package": {
+              "type": "boolean",
+              "default": false,
+              "description": "Collect a forensic investigation package from the device. Maps to `detectionAction.responseActions[collectInvestigationPackageResponseAction]`."
+            },
+            "run_antivirus_scan": {
+              "type": "boolean",
+              "default": false,
+              "description": "Run a full Microsoft Defender Antivirus scan on the device. Maps to `detectionAction.responseActions[runAntivirusScanResponseAction]`."
+            },
+            "initiate_investigation": {
+              "type": "boolean",
+              "default": false,
+              "description": "Start an automated investigation of the device. Maps to `detectionAction.responseActions[initiateInvestigationResponseAction]`."
+            },
+            "restrict_app_execution": {
+              "type": "boolean",
+              "default": false,
+              "description": "Restrict the device to running only Microsoft-signed binaries. Maps to `detectionAction.responseActions[restrictAppExecutionResponseAction]`."
+            }
+          }
+        },
+        "files": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Actions applied to files found by the query.",
+          "properties": {
+            "allow_block": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "action",
+                "identifier",
+                "groups"
+              ],
+              "description": "Allow or block a file across managed devices. Maps to `detectionAction.responseActions[allow/blockFileResponseAction]`.",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "Allow",
+                    "Block"
+                  ],
+                  "description": "Whether to allow or block the file. Only one may be selected per detection rule."
+                },
+                "identifier": {
+                  "type": "string",
+                  "enum": [
+                    "SHA1",
+                    "SHA256",
+                    "InitiatingProcessSHA1",
+                    "InitiatingProcessSHA256"
+                  ],
+                  "description": "Query column holding the file hash to act on. Must exist in the query results."
+                },
+                "groups": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "selection"
+                  ],
+                  "description": "Which device groups the action applies to.",
+                  "if": {
+                    "properties": {
+                      "selection": {
+                        "const": "All"
+                      }
+                    },
+                    "required": [
+                      "selection"
+                    ]
+                  },
+                  "else": {
+                    "required": [
+                      "selection",
+                      "device_groups"
+                    ]
+                  },
+                  "properties": {
+                    "selection": {
+                      "type": "string",
+                      "enum": [
+                        "All",
+                        "Specific"
+                      ],
+                      "description": "`All` applies to every managed device; `Specific` requires `device_groups`."
+                    },
+                    "device_groups": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "description": "Named device groups the action applies to. Maps to `detectionAction.responseActions[allow/blockFileResponseAction].deviceGroupNames`."
+                    }
+                  }
+                }
+              }
+            },
+            "quarantine_file": {
+              "type": "string",
+              "enum": [
+                "SHA1",
+                "InitiatingProcessSHA1"
+              ],
+              "description": "Query column holding the hash of the file to stop and move to quarantine. Maps to `detectionAction.responseActions[stopAndQuarantineFileResponseAction]`."
+            }
+          }
+        },
+        "users": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Actions applied to users found by the query.",
+          "properties": {
+            "mark_as_compromised": {
+              "type": "string",
+              "enum": [
+                "AccountObjectId",
+                "InitiatingProcessAccountObjectId",
+                "ServicePrincipalId",
+                "RecipientObjectId"
+              ],
+              "description": "Query column identifying the user whose Entra ID risk level is raised to high, triggering high-risk identity protection policies."
+            },
+            "disable_user": {
+              "type": "string",
+              "enum": [
+                "AccountSid",
+                "InitiatingProcessAccountSid",
+                "RequestAccountSid",
+                "OnPremSid"
+              ],
+              "description": "Query column identifying the user to temporarily block from signing in on premises."
+            },
+            "force_password_reset": {
+              "type": "string",
+              "enum": [
+                "AccountSid",
+                "InitiatingProcessAccountSid",
+                "RequestAccountSid",
+                "OnPremSid"
+              ],
+              "description": "Query column identifying the user prompted to change password at next sign-in."
+            }
+          }
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selection"
+      ],
+      "description": "Which devices the rule runs against. Maps to `detectionAction.organizationalScope`.",
+      "if": {
+        "properties": {
+          "selection": {
+            "const": "All"
+          }
+        },
+        "required": [
+          "selection"
+        ]
+      },
+      "else": {
+        "required": [
+          "selection",
+          "device_groups"
+        ]
+      },
+      "properties": {
+        "selection": {
+          "type": "string",
+          "enum": [
+            "All",
+            "Specific"
+          ],
+          "default": "All",
+          "description": "`All` scopes to every device; `Specific` requires `device_groups`. Maps to `detectionAction.organizationalScope.scopeType`."
+        },
+        "device_groups": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Named device groups the rule is scoped to. Maps to `detectionAction.organizationalScope.scopeNames`."
+        }
+      }
+    },
+    "exclusions": {
+      "type": "array",
+      "description": "Tuning exclusions appended to the deployed query in order, each documented with a reason. A per-endpoint exclusion is a separate deployment entry in UDLF, so there is no tenant field here.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "query"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Why this exclusion exists. Required so tuning decisions stay auditable."
+          },
+          "let": {
+            "type": "object",
+            "additionalProperties": false,
+            "patternProperties": {
+              "^[A-Za-z0-9_-]+$": {
+                "type": "string"
+              }
+            },
+            "description": "KQL `let` bindings emitted before the exclusion query and referenceable from it. Values are inserted verbatim."
+          },
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "description": "KQL appended to the base query."
+          }
+        }
+      }
+    },
+    "advanced": {
+      "type": "object",
+      "description": "Escape hatch for MDE API properties this sub-schema does not model. Passed through verbatim, so keys must match the API exactly. Prefer a modelled field where one exists — anything here is unvalidated and invisible to tooling.",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "integer",
+          "boolean"
+        ]
+      }
+    }
+  }
+}

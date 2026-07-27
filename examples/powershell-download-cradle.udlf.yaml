@@ -65,20 +65,30 @@ deployments:
     platform: splunk-es
     mode: alert
     lifecycle: live
-    config:                          # free-form, platform-scoped; UDLF validates nothing here
+    # Free-form to the UDLF core schema. Optionally checked against
+    # schemas/udlf/config/splunk-es/v0.1.0.json as a separate, explicit pass.
+    config:
+      schema: splunk-es::0.1.0         # which config revision this was authored against
       schedule:
-        frequency: "0 * * * *"
-        lookback: "-70m"
-      suppression:
+        cron: "0 * * * *"            # cron goes in `cron`; `frequency` is for "15m"-style sugar
+        lookback: "-70m@m"
+      suppression:                   # throttles the saved search itself
         fields: [ComputerName, User]
         window: "1h"
-      rba:                           # mode=alert -> notable + risk annotation
-        risk_score: 50
-        risk_objects:
+      notable:                       # mode=alert -> raise a notable...
+        rule_title: "PowerShell download cradle on $ComputerName$"
+        rule_description: "%description%"
+        nes_fields: [ComputerName, User]
+        security_domain: endpoint
+      rba:                           # ...and contribute risk
+        message: "PowerShell download cradle executed on $ComputerName$ by $User$"
+        risk_objects:                # score is per object, not per detection
           - field: ComputerName
             type: system
+            score: 50
           - field: User
             type: user
+            score: 50
 
 changelog:
   - date: "2024-01-15"

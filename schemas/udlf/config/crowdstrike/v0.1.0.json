@@ -1,0 +1,340 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://detectionflow.com/schemas/udlf/config/crowdstrike/v0.1.0",
+  "title": "UDLF deployment config — CrowdStrike Falcon Correlation Rules",
+  "description": "Optional, opt-in sub-schema for the `config` block of a UDLF deployment whose `platform` is `crowdstrike`. Covers Falcon correlation rules: rule presentation, classification, outcome and the start/end schedule window. The query is not here — it lives in `detection_content` like any other language variant. Neither are the fields UDLF already owns: maturity and runtime behaviour come from `lifecycle` and `mode`, authorship from `metadata.authors`, and each target tenant is its own deployment entry. Vendor-assigned rule ids are absent too, because UDLF is desired-state only — reconciling against what is actually deployed is the deployer's job. Unlike the Sentinel and Defender sub-schemas, the ATT&CK mapping is modelled here rather than left to the top-level `threat` block: Falcon's tactic and technique vocabularies mix real ATT&CK ids with proprietary `CST*` values (\"AI Powered IOA\", \"Falcon OverWatch\", \"Machine Learning\") that `threat` cannot express. This schema is NOT referenced by the UDLF core schema; apply it separately when you want the block validated.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "type": "string",
+      "pattern": "^crowdstrike::[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "default": "crowdstrike::0.1.0",
+      "description": "Self-identifying sub-schema version for this config block, so this file can version independently of UDLF core."
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "informational"
+      ],
+      "description": "Severity for this deployment. **Optional — omit it and the deployer uses `detection_context.severity`.** Set it only to override the detection's severity for this target. Always uses UDLF's own vocabulary, whatever the platform's native scale is, so an author never has to know the vendor spelling; the deployer translates. Maps to Falcon's severity, which takes these same five values title-cased (`high` -> `High`).",
+      "examples": [
+        "high"
+      ]
+    },
+    "details": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Correlation rule presentation and classification. `name` and `description` override what Falcon would otherwise take from the detection; the rest is rule behaviour. There is no `severity` here: Falcon's severity vocabulary is exactly UDLF's five values, so `detection_context.severity` maps straight onto it and the deployer applies it, title-casing on the way out (`high` -> `High`). On import, read it back into `detection_context.severity` rather than into this block.",
+      "allOf": [
+        {
+          "if": {
+            "not": {
+              "required": [
+                "tactic"
+              ]
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "technique"
+              ]
+            }
+          },
+          "$comment": "Falcon's UI presents techniques only once a tactic is chosen, and the valid technique set is tactic-dependent — a technique without a tactic has nothing to hang off."
+        },
+        {
+          "if": {
+            "properties": {
+              "tactic": {
+                "const": "CSTA0008"
+              }
+            },
+            "required": [
+              "tactic"
+            ]
+          },
+          "then": {
+            "properties": {
+              "technique": {
+                "enum": [
+                  "CST0021",
+                  "CST0022"
+                ]
+              }
+            }
+          },
+          "$comment": "AI Powered IOA -> Command and Scripting Interpreter, Malicious File."
+        },
+        {
+          "if": {
+            "properties": {
+              "tactic": {
+                "const": "CSTA0005"
+              }
+            },
+            "required": [
+              "tactic"
+            ]
+          },
+          "then": {
+            "properties": {
+              "technique": {
+                "enum": [
+                  "CST0004",
+                  "CST0005"
+                ]
+              }
+            }
+          },
+          "$comment": "Custom Intelligence -> Indicator of Attack, Indicator of Compromise."
+        },
+        {
+          "if": {
+            "properties": {
+              "tactic": {
+                "const": "CSTA0002"
+              }
+            },
+            "required": [
+              "tactic"
+            ]
+          },
+          "then": {
+            "properties": {
+              "technique": {
+                "const": "CST0012"
+              }
+            }
+          },
+          "$comment": "Exploit -> Exploit Mitigation."
+        },
+        {
+          "if": {
+            "properties": {
+              "tactic": {
+                "const": "CSTA0007"
+              }
+            },
+            "required": [
+              "tactic"
+            ]
+          },
+          "then": {
+            "properties": {
+              "technique": {
+                "enum": [
+                  "CSTA0020",
+                  "CSTA0018",
+                  "CSTA0019"
+                ]
+              }
+            }
+          },
+          "$comment": "Falcon Intel -> Attributed to adversary, Intelligence Indicator Domain, Intelligence Indicator Hash."
+        },
+        {
+          "if": {
+            "properties": {
+              "tactic": {
+                "const": "CSTA0006"
+              }
+            },
+            "required": [
+              "tactic"
+            ]
+          },
+          "then": {
+            "properties": {
+              "technique": {
+                "enum": [
+                  "CST0002",
+                  "CST0015",
+                  "CST0003"
+                ]
+              }
+            }
+          },
+          "$comment": "Falcon OverWatch -> Malicious Activity, Malicious File, Suspicious Activity."
+        },
+        {
+          "if": {
+            "properties": {
+              "tactic": {
+                "const": "CSTA0004"
+              }
+            },
+            "required": [
+              "tactic"
+            ]
+          },
+          "then": {
+            "properties": {
+              "technique": {
+                "enum": [
+                  "CST0006",
+                  "CST0008",
+                  "CST0007"
+                ]
+              }
+            }
+          },
+          "$comment": "Machine Learning -> Adware/PUP, Cloud-based ML, Sensor-based ML."
+        },
+        {
+          "if": {
+            "properties": {
+              "tactic": {
+                "const": "CSTA0003"
+              }
+            },
+            "required": [
+              "tactic"
+            ]
+          },
+          "then": {
+            "properties": {
+              "technique": {
+                "enum": [
+                  "CST0011",
+                  "CST0010"
+                ]
+              }
+            }
+          },
+          "$comment": "Post Exploit -> Malicious Tool Delivery, Malicious Tool Execution."
+        }
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Rule name in Falcon. Overrides the detection title for this deployment."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Rule description in Falcon. Overrides `detection_context.description` for this deployment."
+        },
+        "trigger": {
+          "type": "string",
+          "enum": [
+            "Verbose",
+            "Summary"
+          ],
+          "description": "`Verbose` produces one outcome per matching result; `Summary` produces one outcome covering all matches. Both are capped per rule trigger, so `Verbose` on a broad query will truncate."
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "Incident",
+            "Detection"
+          ],
+          "description": "Whether a match creates a Falcon detection or escalates straight to an incident."
+        },
+        "tactic": {
+          "type": "string",
+          "description": "Tactic this rule maps to. `TA*` values are ATT&CK Enterprise and Mobile; `CSTA*` values are CrowdStrike's own categories with no ATT&CK equivalent — CSTA0008 AI Powered IOA, CSTA0005 Custom Intelligence, CSTA0002 Exploit, CSTA0007 Falcon Intel, CSTA0006 Falcon OverWatch, CSTA0004 Machine Learning, CSTA0003 Post Exploit.",
+          "enum": [
+            "TA0043",
+            "TA0042",
+            "TA0001",
+            "TA0002",
+            "TA0003",
+            "TA0004",
+            "TA0005",
+            "TA0006",
+            "TA0007",
+            "TA0008",
+            "TA0009",
+            "TA0011",
+            "TA0010",
+            "TA0040",
+            "TA0027",
+            "TA0041",
+            "TA0028",
+            "TA0029",
+            "TA0030",
+            "TA0031",
+            "TA0032",
+            "TA0033",
+            "TA0035",
+            "TA0037",
+            "TA0036",
+            "TA0034",
+            "CSTA0008",
+            "CSTA0005",
+            "CSTA0002",
+            "CSTA0007",
+            "CSTA0006",
+            "CSTA0004",
+            "CSTA0003"
+          ]
+        },
+        "technique": {
+          "type": "string",
+          "pattern": "^(CSTA?|T)\\d{4}(\\.\\d{3})?$",
+          "description": "Technique this rule maps to. Requires `tactic` to be set, and the valid set is tactic-dependent (enforced above for the proprietary tactics). Falcon supports only a subset of current ATT&CK, so verify in the UI before authoring a `T*` value. The pattern admits a `CSTA` prefix as well as `CST`: the three Falcon Intel techniques (CSTA0020/0018/0019) are documented with the tactic-style `CSTA` prefix, unlike every other technique, so a `CST`-only pattern would make them impossible to express. Whether that prefix is intentional or an upstream typo is unverified — the documented values are preserved as-is rather than silently rewritten."
+        }
+      }
+    },
+    "schedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "When the correlation rule runs. Set `lookback` at least as long as `frequency` so overlapping windows cover late-arriving logs — at the cost of an event potentially appearing in more than one outcome.",
+      "properties": {
+        "start": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "description": "UTC time to begin running the query. Defaults to 15 minutes after deployment when omitted.",
+          "examples": [
+            "2024-11-19T19:00:00Z"
+          ]
+        },
+        "end": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "description": "UTC time to stop running the query. Runs indefinitely when omitted.",
+          "examples": [
+            "2024-11-19T19:00:00Z"
+          ]
+        },
+        "frequency": {
+          "type": "string",
+          "pattern": "^(?:7d|[1-6]d(?:[0-9]|1[0-9]|2[0-3])h(?:[5-9]|[1-5][0-9])m?|[1-6]d(?:[0-9]|1[0-9]|2[0-3])h|[1-6]d(?:[5-9]|[1-5][0-9])m|[1-6]d|(?:[0-9]|1[0-9]|2[0-3])h(?:[5-9]|[1-5][0-9])m?|(?:[0-9]|1[0-9]|2[0-3])h|(?:[5-9]|[1-5][0-9])m)$",
+          "description": "How often the query runs, as combinable `NdNhNm`. Minimum 5 minutes, maximum 7 days.",
+          "examples": [
+            "5m",
+            "5h10m",
+            "1d2h"
+          ]
+        },
+        "lookback": {
+          "type": "string",
+          "pattern": "^(?:7d|[1-6]d(?:[0-9]|1[0-9]|2[0-3])h(?:[5-9]|[1-5][0-9])m?|[1-6]d(?:[0-9]|1[0-9]|2[0-3])h|[1-6]d(?:[5-9]|[1-5][0-9])m|[1-6]d|(?:[0-9]|1[0-9]|2[0-3])h(?:[5-9]|[1-5][0-9])m?|(?:[0-9]|1[0-9]|2[0-3])h|(?:[5-9]|[1-5][0-9])m)$",
+          "description": "How far back each run searches. Same format and bounds as `frequency`.",
+          "examples": [
+            "10m",
+            "1d"
+          ]
+        }
+      }
+    },
+    "advanced": {
+      "type": "object",
+      "description": "Escape hatch for Falcon API properties this sub-schema does not model. Passed through verbatim, so keys must match the API exactly. Prefer a modelled field where one exists — anything here is unvalidated and invisible to tooling.",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "integer",
+          "boolean"
+        ]
+      }
+    }
+  }
+}

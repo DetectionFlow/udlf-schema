@@ -315,8 +315,8 @@
           },
           "platform": {
             "type": "string",
-            "description": "Target platform type — the deployment discriminator. Known values: splunk, splunk-es, elastic, sentinel. Selects the logic variant (e.g. splunk-es -> spl) and scopes the meaning of the free-form 'config' block. Intentionally open/extensible: unknown platforms validate against the common fields only.",
-            "examples": ["splunk", "splunk-es", "elastic", "sentinel"]
+            "description": "Deployment target — the discriminator. Known values: splunk, splunk-es, splunk-contentctl, sentinel, defender-for-endpoint, crowdstrike, sentinel-one, elastic. Selects the logic variant (e.g. splunk-es -> spl, sentinel -> kql) and scopes the meaning of the free-form 'config' block. Usually names a product, but may name a delivery toolchain where that changes the shape of 'config': splunk and splunk-es are built and uploaded as an app by the deployer, while splunk-contentctl hands a contentctl-shaped detection to the contentctl build pipeline instead. Note that EDR targets are not scheduled-search platforms — sentinel-one evaluates continuously and its config carries active-response actions rather than a schedule. Intentionally open/extensible: unknown values validate against the common fields only.",
+            "examples": ["splunk", "splunk-es", "splunk-contentctl", "sentinel", "defender-for-endpoint", "crowdstrike", "sentinel-one", "elastic"]
           },
           "mode": {
             "type": "string",
@@ -330,7 +330,7 @@
           },
           "config": {
             "type": "object",
-            "description": "Free-form, platform-scoped deployment configuration. Its meaning is set by the sibling 'platform'; UDLF does not validate its contents (additionalProperties: true) so vendor changes never force a schema bump. Holds deployment policy and vendor round-trip fidelity that UDLF does not model first-class: e.g. for splunk-es, the 'rba' (risk_objects/threat_objects/risk_score/risk_message), 'schedule' (cron/lookback), 'suppression' (fields/window), plus round-trip fields such as drilldown_searches, entities, nes_fields, detection_type, data_source/data_models, and source dates. On import, populate from the vendor export; when authoring new, omit and let the deployer generate what the platform requires. Recommended (non-enforced) per-platform shapes are documented in the specification.",
+            "description": "Free-form, platform-scoped deployment configuration. Its meaning is set by the sibling 'platform'; this schema validates nothing inside it (additionalProperties: true) so vendor changes never force a UDLF bump. Holds deployment policy and vendor round-trip fidelity that UDLF does not model first-class: e.g. for splunk-es, 'rba' (message/risk_objects/threat_objects), 'schedule' (cron/lookback), 'suppression' (fields/window), 'notable', and 'drilldown_searches'. On import, populate from the vendor export; when authoring new, omit and let the deployer generate what the platform requires. Optional, opt-in sub-schemas describing the known shapes ship separately under schemas/udlf/config/<platform>/v<version>.json. They are deliberately NOT referenced from here — validate against one as a second, explicit pass when you want the block checked. A config block may name the sub-schema revision it was authored against via a 'schema' key (e.g. 'splunk-es::0.1.0'); those revisions carry their own semver line so config shapes version independently of UDLF core.",
             "additionalProperties": true
           }
         }
