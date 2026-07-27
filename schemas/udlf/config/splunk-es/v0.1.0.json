@@ -151,6 +151,20 @@
             ]
           ]
         },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "informational",
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ],
+          "description": "Severity ES raises the notable with. Distinct from `detection_context.severity`, which is the detection's inherent severity — this is the per-deployment value ES displays and sorts Incident Review on. Maps to `action.notable.param.severity`.",
+          "examples": [
+            "medium"
+          ]
+        },
         "security_domain": {
           "type": "string",
           "enum": [
@@ -225,9 +239,9 @@
               },
               "score": {
                 "type": "integer",
-                "minimum": 1,
+                "minimum": 0,
                 "maximum": 100000,
-                "description": "Risk contributed to this object each time the detection fires, before risk factors are applied. Maps to `risk_score`."
+                "description": "Risk contributed to this object each time the detection fires, before risk factors are applied. Maps to `risk_score`. ES accepts 0, so it validates here, but a 0 contributes no risk at all and is almost always a misconfiguration rather than an intent. Note contentctl enforces a 1-100 range, so a detection also deployed via `splunk-contentctl` has a narrower valid range than this."
               }
             }
           }
