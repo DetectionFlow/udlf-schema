@@ -121,7 +121,7 @@
     },
     "notable": {
       "type": "object",
-      "description": "Notable-event configuration, emitted as the `action.notable.*` conf keys. Relevant when the deployment's `mode` is `alert`; a `monitoring` deployment normally omits this and carries `rba` only.",
+      "description": "Notable-event configuration, emitted as the `action.notable.*` conf keys. Relevant when the deployment's `mode` is `alert`; a `monitoring` deployment normally omits this and carries `rba` only. Note there is no `severity` here: ES's notable severity vocabulary is exactly UDLF's (`critical`/`high`/`medium`/`low`/`informational`, same casing), so `detection_context.severity` maps straight onto `action.notable.param.severity` and the deployer applies it. On import, read that conf key back into `detection_context.severity` rather than into this block.",
       "additionalProperties": false,
       "properties": {
         "rule_title": {
@@ -149,20 +149,6 @@
               "user",
               "dest"
             ]
-          ]
-        },
-        "severity": {
-          "type": "string",
-          "enum": [
-            "informational",
-            "low",
-            "medium",
-            "high",
-            "critical"
-          ],
-          "description": "Severity ES raises the notable with. Distinct from `detection_context.severity`, which is the detection's inherent severity — this is the per-deployment value ES displays and sorts Incident Review on. Maps to `action.notable.param.severity`.",
-          "examples": [
-            "medium"
           ]
         },
         "security_domain": {
