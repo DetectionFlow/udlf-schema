@@ -92,8 +92,8 @@
         },
         "frequency": {
           "type": "string",
-          "pattern": "^((([1-9]|1[0-4])d)|(([1-9]|[1-9][0-9]|[1-2][0-9][0-9]|3[0-2][0-9]|33[0-7])h)|(([5-9]|[1-9][0-9]{1,3}|1[0-9]{0,4}|200[0-9][0-9]|201[0-5][0-9]|20160)m))$",
-          "description": "How often the query runs, as `Nd`/`Nh`/`Nm`. Sentinel allows 5 minutes to 14 days. Maps to `queryFrequency`.",
+          "pattern": "^((([1-9]|1[0-4])d)|(([1-9]|[1-9][0-9]|[1-2][0-9][0-9]|3[0-2][0-9]|33[0-7])h)|(([5-9]|[1-9][0-9]{1,3}|1[0-9]{4}|200[0-9]{2}|201[0-5][0-9]|20160)m))$",
+          "description": "How often the query runs, as `Nd`/`Nh`/`Nm`. Sentinel allows 5 minutes to 14 days — a one-minute cadence is not a scheduled rule, it is `nrt: true`. Maps to `queryFrequency`.",
           "examples": [
             "5m",
             "1h",
@@ -102,7 +102,7 @@
         },
         "lookback": {
           "type": "string",
-          "pattern": "^((([0-9]|1[0-4])d)|(([1-9]|[1-9][0-9]|[1-2][0-9][0-9]|3[0-2][0-9]|33[0-7])h)|(([1-9]|[1-9][0-9]{1,3}|1[0-9]{0,4}|200[0-9][0-9]|201[0-5][0-9]|20160)m))$",
+          "pattern": "^((([0-9]|1[0-4])d)|(([1-9]|[1-9][0-9]|[1-2][0-9][0-9]|3[0-2][0-9]|33[0-7])h)|(([1-9]|[1-9][0-9]{1,3}|1[0-9]{4}|200[0-9][0-9]|201[0-5][0-9]|20160)m))$",
           "description": "How far back the query searches, up to 14 days. Maps to `queryPeriod`.",
           "examples": [
             "5m",
@@ -151,13 +151,20 @@
           "description": "Create incidents from alerts this rule raises. Maps to `incidentConfiguration.createIncident`."
         },
         "suppression": {
-          "type": [
-            "string",
-            "boolean"
+          "oneOf": [
+            {
+              "type": "boolean",
+              "const": false,
+              "description": "Disable suppression."
+            },
+            {
+              "type": "string",
+              "pattern": "^((1d)|(([1-9]|1[0-9]|2[0-4])h)|(([5-9]|[1-9][0-9]{1,2}|1[0-3][0-9]{2}|14[0-3][0-9]|1440)m))$",
+              "description": "Suppression duration, 5m to 1d."
+            }
           ],
           "default": false,
-          "pattern": "^(((1d)|(([1-9]|1[0-9]|2[0-4])h)|(([5-9]|[1-9][0-9]{1,2}|1[0-3][0-9][0-9]|14[0-3][0-9]|1440)m)))|false$",
-          "description": "How long to wait after firing before the rule may fire again, 5 minutes to 1 day. Use boolean `false` to disable suppression entirely. Maps to `suppressionDuration`.",
+          "description": "How long to wait after firing before the rule may fire again, from 5 minutes to 1 day. Use boolean `false` to disable suppression entirely — the string \"false\" is rejected so the two cannot be confused, and `true` is meaningless because there is no default duration. Maps to `suppressionDuration`.",
           "examples": [
             "1h",
             false

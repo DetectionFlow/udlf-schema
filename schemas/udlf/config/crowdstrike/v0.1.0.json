@@ -275,8 +275,8 @@
         },
         "technique": {
           "type": "string",
-          "pattern": "^(CST|T)\\d{4}(\\.\\d{3})?$",
-          "description": "Technique this rule maps to. Requires `tactic` to be set, and the valid set is tactic-dependent (enforced above for the proprietary tactics). Falcon supports only a subset of current ATT&CK, so verify in the UI before authoring a `T*` value."
+          "pattern": "^(CSTA?|T)\\d{4}(\\.\\d{3})?$",
+          "description": "Technique this rule maps to. Requires `tactic` to be set, and the valid set is tactic-dependent (enforced above for the proprietary tactics). Falcon supports only a subset of current ATT&CK, so verify in the UI before authoring a `T*` value. The pattern admits a `CSTA` prefix as well as `CST`: the three Falcon Intel techniques (CSTA0020/0018/0019) are documented with the tactic-style `CSTA` prefix, unlike every other technique, so a `CST`-only pattern would make them impossible to express. Whether that prefix is intentional or an upstream typo is unverified — the documented values are preserved as-is rather than silently rewritten."
         }
       }
     },

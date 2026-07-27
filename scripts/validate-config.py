@@ -28,7 +28,7 @@ import yaml
 SCHEMA_DIR = pathlib.Path(__file__).resolve().parent.parent / "schemas" / "udlf" / "config"
 
 
-def sub_schema_for(platform: str, declared: str | None) -> pathlib.Path | None:
+def sub_schema_for(platform: str, declared: object) -> pathlib.Path | None:
     """Resolve a platform to a sub-schema file.
 
     A config block may declare the revision it was authored against via a
@@ -36,12 +36,17 @@ def sub_schema_for(platform: str, declared: str | None) -> pathlib.Path | None:
     to 0.1.0 keeps validating against 0.1.0 after a later revision ships —
     rather than guessing at compatibility, which pre-1.0 semver does not
     promise. With no `schema` key, use the highest version available.
+
+    `declared` is whatever the config block put in `schema`, which the core
+    schema does not constrain — it may be any JSON type. A non-string is not a
+    resolvable pin, so fall through to the highest version and let the
+    sub-schema report the type error properly rather than crashing here.
     """
     directory = SCHEMA_DIR / platform
     if not directory.is_dir():
         return None
 
-    if declared and "::" in declared:
+    if isinstance(declared, str) and "::" in declared:
         pinned = directory / f"v{declared.split('::', 1)[1]}.json"
         return pinned if pinned.exists() else None
 
