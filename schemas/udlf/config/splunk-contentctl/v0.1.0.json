@@ -5,25 +5,50 @@
   "description": "Optional, opt-in sub-schema for the `config` block of a UDLF deployment whose `platform` is `splunk-contentctl`. This is a different delivery path, not a different product: the deployer emits a contentctl-shaped detection YAML and hands it to the contentctl build pipeline (validate → build app → test), rather than building and uploading an app itself. Because contentctl owns the build, this block mirrors contentctl's own field names and nesting so the emitted file needs no translation. Two consequences follow. First, `type` is the real discriminator — it selects the ESCU default deployment (and therefore the schedule), decides whether RBA and notables are emitted at all, and gates several other fields. Second, contentctl models are `extra=\"forbid\"` at every level, so this sub-schema is closed and offers no `advanced` passthrough: an unmodelled key would fail the contentctl build anyway. Fields UDLF already owns are deliberately absent — ATT&CK IDs and CVEs come from the top-level `threat` block, implementation and false-positive prose from `detection_context`, tests from the top-level `tests` array, analytic stories from strategy membership, and `nist` is overwritten by contentctl from `type` so authoring it has no effect. This schema is NOT referenced by the UDLF core schema; apply it separately when you want the block validated.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["type"],
+  "required": [
+    "type"
+  ],
   "allOf": [
     {
       "if": {
-        "properties": { "type": { "enum": ["Hunting", "Correlation"] } },
-        "required": ["type"]
+        "properties": {
+          "type": {
+            "enum": [
+              "Hunting",
+              "Correlation"
+            ]
+          }
+        },
+        "required": [
+          "type"
+        ]
       },
       "then": {
-        "not": { "required": ["rba"] },
+        "not": {
+          "required": [
+            "rba"
+          ]
+        },
         "$comment": "contentctl rejects an rba block on Hunting and Correlation detections: their default ESCU deployments do not enable risk-based alerting, so any risk config would be silently dropped or raise. The inverse rule — rba is *required* for TTP and Anomaly — is gated on the detection being production, which lives outside this block (UDLF `lifecycle: live`), so it is a deployer-side check rather than a schema constraint."
       }
     },
     {
       "if": {
-        "properties": { "type": { "const": "Hunting" } },
-        "required": ["type"]
+        "properties": {
+          "type": {
+            "const": "Hunting"
+          }
+        },
+        "required": [
+          "type"
+        ]
       },
       "then": {
-        "properties": { "enabled_by_default": { "const": false } },
+        "properties": {
+          "enabled_by_default": {
+            "const": false
+          }
+        },
         "$comment": "Hunting detections are never enabled on install."
       }
     }
@@ -37,26 +62,43 @@
     },
     "type": {
       "type": "string",
-      "enum": ["TTP", "Anomaly", "Hunting", "Correlation"],
+      "enum": [
+        "TTP",
+        "Anomaly",
+        "Hunting",
+        "Correlation"
+      ],
       "description": "contentctl analytic type — the discriminator for the whole block. It selects the ESCU default deployment by name (`ESCU Default Configuration <type>`), which supplies the schedule and alert actions, and it determines whether notables and RBA are emitted: TTP gets both, Anomaly gets RBA only, Hunting gets neither, Correlation gets a notable titled `RBA: <name>`. Because the schedule is inherited from the matched deployment, there is no `schedule` field here — override it with the `deployment` block below."
     },
     "data_source": {
       "type": "array",
       "description": "Names of the contentctl data sources this detection relies on. Each must resolve to an entry under the content pack's `data_sources/` directory. A single entry may join several sources with ` AND ` when the search correlates across them.",
-      "items": { "type": "string", "minLength": 1 },
-      "examples": [["Sysmon EventID 1"]]
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "examples": [
+        [
+          "Sysmon EventID 1"
+        ]
+      ]
     },
     "rba": {
       "type": "object",
       "description": "Risk-Based Alerting. Valid only for `type` TTP and Anomaly — contentctl rejects it on Hunting and Correlation. For production TTP and Anomaly detections contentctl requires it with at least one risk object.",
       "additionalProperties": false,
-      "required": ["message", "risk_objects"],
+      "required": [
+        "message",
+        "risk_objects"
+      ],
       "properties": {
         "message": {
           "type": "string",
           "minLength": 1,
           "description": "Risk and notable message template. Every `$field$` token must correspond to a field the search actually produces — contentctl validates this for production detections.",
-          "examples": ["A download cradle was executed on $dest$ by $user$"]
+          "examples": [
+            "A download cradle was executed on $dest$ by $user$"
+          ]
         },
         "risk_objects": {
           "type": "array",
@@ -65,7 +107,11 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["field", "type", "score"],
+            "required": [
+              "field",
+              "type",
+              "score"
+            ],
             "properties": {
               "field": {
                 "type": "string",
@@ -74,7 +120,11 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["system", "user", "other"],
+                "enum": [
+                  "system",
+                  "user",
+                  "other"
+                ],
                 "description": "Category of the risk object."
               },
               "score": {
@@ -92,7 +142,10 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["field", "type"],
+            "required": [
+              "field",
+              "type"
+            ],
             "properties": {
               "field": {
                 "type": "string",
@@ -101,16 +154,34 @@
               },
               "type": {
                 "type": "string",
-                "description": "Category of the threat object. contentctl enforces its own normalised list, which is shorter and spelled differently from the Splunk RBA documentation list used by the splunk-es sub-schema (for example `ip_address` here versus `ip` there). Values outside this list fail the contentctl build.",
+                "description": "Category of the threat object. contentctl enforces this list and rejects anything outside it at build time — note there is deliberately **no `other` fallback**, so a contentctl deployment cannot express an unrecognised threat object type at all. That is faithful to contentctl: its ThreatObjectType has 26 members and no OTHER/UNKNOWN. If you need a type outside this list, the value cannot ship through contentctl.\n\nThese spellings are contentctl's own and differ from the Splunk RBA community list (`ip_address` here versus `ip` there, `domain` versus `url_domain`). contentctl writes the value verbatim into savedsearches.conf, so it is what a running ES instance will contain. The `splunk-es` sub-schema accepts both vocabularies for exactly this reason; do not rewrite between them when a detection carries both deployments.",
                 "enum": [
-                  "certificate_common_name", "certificate_organization", "certificate_serial", "certificate_unit",
-                  "command", "domain", "email_address", "email_subject",
-                  "file_hash", "file_name", "file_path",
-                  "http_user_agent", "ip_address",
-                  "process", "process_name", "process_hash",
-                  "parent_process", "parent_process_name",
-                  "registry_path", "registry_value_name", "registry_value_text",
-                  "service", "signature", "system", "tls_hash", "url"
+                  "certificate_common_name",
+                  "certificate_organization",
+                  "certificate_serial",
+                  "certificate_unit",
+                  "command",
+                  "domain",
+                  "email_address",
+                  "email_subject",
+                  "file_hash",
+                  "file_name",
+                  "file_path",
+                  "http_user_agent",
+                  "ip_address",
+                  "process",
+                  "process_name",
+                  "process_hash",
+                  "parent_process",
+                  "parent_process_name",
+                  "registry_path",
+                  "registry_value_name",
+                  "registry_value_text",
+                  "service",
+                  "signature",
+                  "system",
+                  "tls_hash",
+                  "url"
                 ]
               }
             }
@@ -124,7 +195,12 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["name", "search", "earliest_offset", "latest_offset"],
+        "required": [
+          "name",
+          "search",
+          "earliest_offset",
+          "latest_offset"
+        ],
         "properties": {
           "name": {
             "type": "string",
@@ -137,16 +213,26 @@
             "description": "Drilldown SPL. May contain `%original_detection_search%`, substituted with the detection's own search at build time."
           },
           "earliest_offset": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "minLength": 1,
             "description": "Start of the drilldown window. contentctl requires this key explicitly — it has no default. Commonly `$info_min_time$`.",
-            "examples": ["$info_min_time$"]
+            "examples": [
+              "$info_min_time$"
+            ]
           },
           "latest_offset": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "minLength": 1,
             "description": "End of the drilldown window. contentctl requires this key explicitly — it has no default. Commonly `$info_max_time$`.",
-            "examples": ["$info_max_time$"]
+            "examples": [
+              "$info_max_time$"
+            ]
           }
         }
       }
@@ -165,27 +251,71 @@
       "type": "object",
       "description": "contentctl's tags block, mirroring its nesting so the emitted YAML needs no restructuring. Only the tags UDLF does not already own appear here — ATT&CK IDs and CVEs come from the top-level `threat` block, and analytic stories from strategy membership.",
       "additionalProperties": false,
-      "required": ["asset_type", "security_domain", "product"],
+      "required": [
+        "asset_type",
+        "security_domain",
+        "product"
+      ],
       "properties": {
         "asset_type": {
           "type": "string",
           "description": "Type of asset the detection targets. contentctl enforces this closed list.",
           "enum": [
-            "AWS Account", "AWS EKS Kubernetes cluster", "AWS Federated Account", "AWS Instance",
-            "Account", "Amazon EKS Kubernetes cluster", "Amazon EKS Kubernetes cluster Pod",
-            "Amazon Elastic Container Registry", "Azure Tenant", "Azure AKS Kubernetes cluster",
-            "Azure Active Directory", "CircleCI", "Cloud Compute Instance", "Cloud Instance",
-            "DNS Servers", "Database Server", "Domain Server", "EC2 Snapshot", "Endpoint",
-            "GCP", "GCP Account", "GCP GKE EKS Kubernetes cluster", "GCP GKE Kubernetes cluster",
-            "GCP Kubernetes cluster", "GCP Storage Bucket", "GDrive", "GSuite", "GitHub",
-            "Google Cloud Platform tenant", "Identity", "Infrastructure", "Instance", "Kubernetes",
-            "Network", "O365 Tenant", "Okta Tenant", "Proxy", "S3 Bucket", "Splunk Server",
-            "Web Server", "Web Proxy", "Web Application", "Windows"
+            "AWS Account",
+            "AWS EKS Kubernetes cluster",
+            "AWS Federated Account",
+            "AWS Instance",
+            "Account",
+            "Amazon EKS Kubernetes cluster",
+            "Amazon EKS Kubernetes cluster Pod",
+            "Amazon Elastic Container Registry",
+            "Azure Tenant",
+            "Azure AKS Kubernetes cluster",
+            "Azure Active Directory",
+            "CircleCI",
+            "Cloud Compute Instance",
+            "Cloud Instance",
+            "DNS Servers",
+            "Database Server",
+            "Domain Server",
+            "EC2 Snapshot",
+            "Endpoint",
+            "GCP",
+            "GCP Account",
+            "GCP GKE EKS Kubernetes cluster",
+            "GCP GKE Kubernetes cluster",
+            "GCP Kubernetes cluster",
+            "GCP Storage Bucket",
+            "GDrive",
+            "GSuite",
+            "GitHub",
+            "Google Cloud Platform tenant",
+            "Identity",
+            "Infrastructure",
+            "Instance",
+            "Kubernetes",
+            "Network",
+            "O365 Tenant",
+            "Okta Tenant",
+            "Proxy",
+            "S3 Bucket",
+            "Splunk Server",
+            "Web Server",
+            "Web Proxy",
+            "Web Application",
+            "Windows"
           ]
         },
         "security_domain": {
           "type": "string",
-          "enum": ["endpoint", "network", "threat", "identity", "access", "audit"],
+          "enum": [
+            "endpoint",
+            "network",
+            "threat",
+            "identity",
+            "access",
+            "audit"
+          ],
           "description": "ES security domain the detection belongs to."
         },
         "product": {
@@ -206,7 +336,10 @@
         "group": {
           "type": "array",
           "description": "Arbitrary grouping labels used by the content pack.",
-          "items": { "type": "string", "minLength": 1 }
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "atomic_guid": {
           "type": "array",
@@ -220,19 +353,29 @@
           "type": "object",
           "description": "Alert suppression. Note the narrower period syntax than raw Splunk — contentctl allows seconds, minutes, and hours only, not days.",
           "additionalProperties": false,
-          "required": ["fields", "period"],
+          "required": [
+            "fields",
+            "period"
+          ],
           "properties": {
             "fields": {
               "type": "array",
               "minItems": 1,
               "description": "Fields to suppress on. Each must appear in the search, and none may contain a space — contentctl errors on spaces because the conf value is comma-delimited and unquoted.",
-              "items": { "type": "string", "minLength": 1, "pattern": "^[^ ]+$" }
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^ ]+$"
+              }
             },
             "period": {
               "type": "string",
               "pattern": "^[0-9]+[smh]$",
               "description": "Suppression window in seconds, minutes, or hours. Days are not accepted — express one day as `86400s`, `1440m`, or `24h`.",
-              "examples": ["86400s", "24h"]
+              "examples": [
+                "86400s",
+                "24h"
+              ]
             }
           }
         },
@@ -245,7 +388,9 @@
           "type": "string",
           "default": "ocsf",
           "description": "Event schema the search is written against.",
-          "examples": ["ocsf"]
+          "examples": [
+            "ocsf"
+          ]
         },
         "mappings": {
           "type": "array",
@@ -263,31 +408,44 @@
           "type": "object",
           "description": "Schedule override. contentctl requires all four keys when the block is present.",
           "additionalProperties": false,
-          "required": ["cron_schedule", "earliest_time", "latest_time", "schedule_window"],
+          "required": [
+            "cron_schedule",
+            "earliest_time",
+            "latest_time",
+            "schedule_window"
+          ],
           "properties": {
             "cron_schedule": {
               "type": "string",
               "minLength": 1,
               "description": "Cron expression for the saved search.",
-              "examples": ["0 * * * *"]
+              "examples": [
+                "0 * * * *"
+              ]
             },
             "earliest_time": {
               "type": "string",
               "minLength": 1,
               "description": "Start of the search window as a Splunk relative-time modifier.",
-              "examples": ["-70m@m"]
+              "examples": [
+                "-70m@m"
+              ]
             },
             "latest_time": {
               "type": "string",
               "minLength": 1,
               "description": "End of the search window as a Splunk relative-time modifier.",
-              "examples": ["-10m@m"]
+              "examples": [
+                "-10m@m"
+              ]
             },
             "schedule_window": {
               "type": "string",
               "minLength": 1,
               "description": "How far the scheduler may delay the search.",
-              "examples": ["auto"]
+              "examples": [
+                "auto"
+              ]
             }
           }
         },
@@ -300,25 +458,41 @@
               "type": "object",
               "description": "Notable event settings. contentctl requires all three keys when the block is present.",
               "additionalProperties": false,
-              "required": ["rule_title", "rule_description", "nes_fields"],
+              "required": [
+                "rule_title",
+                "rule_description",
+                "nes_fields"
+              ],
               "properties": {
                 "rule_title": {
                   "type": "string",
                   "minLength": 1,
                   "description": "Notable title. The built-in deployments use the literal `%name%`, substituted with the detection name at build time.",
-                  "examples": ["%name%"]
+                  "examples": [
+                    "%name%"
+                  ]
                 },
                 "rule_description": {
                   "type": "string",
                   "minLength": 1,
                   "description": "Notable description. The built-in deployments use the literal `%description%`.",
-                  "examples": ["%description%"]
+                  "examples": [
+                    "%description%"
+                  ]
                 },
                 "nes_fields": {
                   "type": "array",
                   "description": "Notable Event Suppression fields offered to the analyst.",
-                  "items": { "type": "string", "minLength": 1 },
-                  "examples": [["user", "dest"]]
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "examples": [
+                    [
+                      "user",
+                      "dest"
+                    ]
+                  ]
                 }
               }
             },
@@ -326,7 +500,9 @@
               "type": "object",
               "description": "Whether risk-based alerting is emitted. This is only the on/off switch — the risk objects themselves live in the top-level `rba` block of this config.",
               "additionalProperties": false,
-              "required": ["enabled"],
+              "required": [
+                "enabled"
+              ],
               "properties": {
                 "enabled": {
                   "type": "boolean",

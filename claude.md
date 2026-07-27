@@ -79,7 +79,11 @@ dispatches on the sibling `platform` (check-jsonschema cannot do this):
   within a major, so the pin is exact, not compatible-within-major). `splunk`/`splunk-es`
   offer an `advanced` map for raw savedsearches.conf keys; `splunk-contentctl` does not, because
   contentctl forbids extra keys itself. Each mirrors what *its own* deployer enforces, so they
-  legitimately differ (e.g. threat-object type spellings, suppression-window units).
+  legitimately differ (e.g. suppression-window units). Exception: `splunk-es` threat-object types
+  accept the **union** of the Splunk RBA community list and contentctl's, because ES constrains the
+  value not at all and contentctl writes its own spelling verbatim into savedsearches.conf — so a
+  live ES instance contains both. Never rewrite between the spellings; a detection with both
+  deployments needs each intact.
 - **Threat** tagging uses paired `attack: [{ technique, tactics }]` plus `software`/`groups`/`cve`
   and a free-form `custom_tags` dict.
 - Optional blocks: `tests` (framework-based, extensible), `links` (typed relationships),

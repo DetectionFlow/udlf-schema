@@ -17,39 +17,63 @@
       "description": "When the saved search runs. Supply exactly one of `cron` or `frequency` — `frequency` is authoring sugar that the deployer expands into a cron expression.",
       "additionalProperties": false,
       "oneOf": [
-        { "required": ["cron"] },
-        { "required": ["frequency"] }
+        {
+          "required": [
+            "cron"
+          ]
+        },
+        {
+          "required": [
+            "frequency"
+          ]
+        }
       ],
       "properties": {
         "cron": {
           "type": "string",
           "description": "Cron expression governing when the search runs. Maps to savedsearches.conf `cron_schedule`.",
           "pattern": "(@(annually|yearly|monthly|weekly|daily|hourly|reboot))|(@every (\\d+(ns|us|ms|s|m|h))+)|((((\\d+,)+\\d+|([\\d\\*]+(\\/|-)\\d+)|\\d+|\\*) ?){5,7})",
-          "examples": ["0 * * * *", "*/10 * * * *"]
+          "examples": [
+            "0 * * * *",
+            "*/10 * * * *"
+          ]
         },
         "frequency": {
           "type": "string",
           "description": "Recurring interval, expanded to a cron expression by the deployer. Splunk only supports 1-59m, 1-23h, or 1-30d — anything more complex must use `cron`. Do not put a cron expression in this field.",
           "pattern": "^((([1-5]?[0-9]|60)m)|((?:[1-9]|1[0-9]|2[0-3])h)|((?:[1-9]|1[0-9]|2[0-9]|30)d))$",
-          "examples": ["15m", "4h", "2d"]
+          "examples": [
+            "15m",
+            "4h",
+            "2d"
+          ]
         },
         "lookback": {
           "type": "string",
           "minLength": 1,
           "description": "Start of the search window, as a Splunk relative-time modifier. Maps to `dispatch.earliest_time`.",
-          "examples": ["-70m@m", "-24h@h"]
+          "examples": [
+            "-70m@m",
+            "-24h@h"
+          ]
         },
         "latest_time": {
           "type": "string",
           "minLength": 1,
           "description": "End of the search window, as a Splunk relative-time modifier. Maps to `dispatch.latest_time`.",
-          "examples": ["-10m@m", "now"]
+          "examples": [
+            "-10m@m",
+            "now"
+          ]
         },
         "schedule_window": {
           "type": "string",
           "minLength": 1,
           "description": "How far the scheduler may delay this search to reduce contention. Maps to `schedule_window`.",
-          "examples": ["auto", "0"]
+          "examples": [
+            "auto",
+            "0"
+          ]
         }
       }
     },
@@ -57,7 +81,10 @@
       "type": "object",
       "description": "Alert throttling — discard repeat alerts sharing the same values for `fields` within `window`. Maps to the savedsearches.conf `alert.suppress.*` keys. Distinct from `notable.nes_fields`, which suppresses at the notable-event layer inside ES.",
       "additionalProperties": false,
-      "required": ["fields", "window"],
+      "required": [
+        "fields",
+        "window"
+      ],
       "properties": {
         "fields": {
           "type": "array",
@@ -74,7 +101,11 @@
           "type": "string",
           "pattern": "^[0-9]+[smhd]$",
           "description": "How long duplicate alerts are suppressed. Maps to `alert.suppress.period`.",
-          "examples": ["1h", "24h", "86400s"]
+          "examples": [
+            "1h",
+            "24h",
+            "86400s"
+          ]
         }
       }
     },
@@ -83,7 +114,10 @@
       "minimum": 0,
       "default": 0,
       "description": "Number of events that must be exceeded within the search window before the alert fires. 0 means fire on any result.",
-      "examples": [0, 10]
+      "examples": [
+        0,
+        10
+      ]
     },
     "notable": {
       "type": "object",
@@ -94,7 +128,9 @@
           "type": "string",
           "minLength": 1,
           "description": "Notable event title. Supports `$field$` token substitution from the search results. Maps to `action.notable.param.rule_title`.",
-          "examples": ["New abnormal credential added to Azure AD by $user$"]
+          "examples": [
+            "New abnormal credential added to Azure AD by $user$"
+          ]
         },
         "rule_description": {
           "type": "string",
@@ -104,14 +140,31 @@
         "nes_fields": {
           "type": "array",
           "description": "Notable Event Suppression fields — the fields ES offers analysts when creating a suppression from this notable. Maps to `action.notable.param.nes_fields`. Not the same as `suppression.fields`, which throttles the saved search itself.",
-          "items": { "type": "string", "minLength": 1 },
-          "examples": [["user", "dest"]]
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "user",
+              "dest"
+            ]
+          ]
         },
         "security_domain": {
           "type": "string",
-          "enum": ["access", "endpoint", "network", "threat", "identity", "audit"],
+          "enum": [
+            "access",
+            "endpoint",
+            "network",
+            "threat",
+            "identity",
+            "audit"
+          ],
           "description": "ES categorisation of the notable event. Maps to `action.notable.param.security_domain`.",
-          "examples": ["threat"]
+          "examples": [
+            "threat"
+          ]
         }
       }
     },
@@ -119,17 +172,29 @@
       "type": "object",
       "description": "Risk-Based Alerting. Attributes a risk score to one or more entities so ES can aggregate risk over time and fire risk incident rules. Emitted as `action.risk.param._risk`. A `monitoring` deployment typically carries `rba` without `notable` — it contributes risk without raising an alert.",
       "additionalProperties": false,
-      "required": ["message"],
+      "required": [
+        "message"
+      ],
       "anyOf": [
-        { "required": ["risk_objects"] },
-        { "required": ["threat_objects"] }
+        {
+          "required": [
+            "risk_objects"
+          ]
+        },
+        {
+          "required": [
+            "threat_objects"
+          ]
+        }
       ],
       "properties": {
         "message": {
           "type": "string",
           "minLength": 1,
           "description": "Human-readable description of the risk activity. Supports `$field$` token substitution from the search results. Maps to `action.risk.param._risk_message`.",
-          "examples": ["Suspicious activity to $domain$ from $user$"]
+          "examples": [
+            "Suspicious activity to $domain$ from $user$"
+          ]
         },
         "risk_objects": {
           "type": "array",
@@ -138,7 +203,11 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["field", "type", "score"],
+            "required": [
+              "field",
+              "type",
+              "score"
+            ],
             "properties": {
               "field": {
                 "type": "string",
@@ -147,7 +216,11 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["user", "system", "other"],
+                "enum": [
+                  "user",
+                  "system",
+                  "other"
+                ],
                 "description": "Category of the risk object. Maps to `risk_object_type`."
               },
               "score": {
@@ -165,7 +238,10 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["field", "type"],
+            "required": [
+              "field",
+              "type"
+            ],
             "properties": {
               "field": {
                 "type": "string",
@@ -174,21 +250,68 @@
               },
               "type": {
                 "type": "string",
-                "description": "Category of the threat object, per the Splunk RBA threat-object type list (https://splunk.github.io/rba/searches/threat_object_types/). Maps to `threat_object_type`. Note that contentctl enforces a shorter, differently-spelled list — see the splunk-contentctl sub-schema.",
+                "description": "Category of the threat object. Maps to `threat_object_type`.\n\nSplunk ES does not constrain this value — it is stored as a free string on the risk event — so the enum here is a typo guard over the vocabularies that actually occur, not a platform rule. Two conventions are in circulation and this accepts both:\n\n- The **Splunk RBA community list** (https://splunk.github.io/rba/searches/threat_object_types/), e.g. `ip`, `process_name`, `url_domain`, `ssl_serial`. Prefer these when authoring new content — they are what the published RBA searches and dashboards group on.\n- **contentctl's list**, e.g. `ip_address`, `process`, `domain`, `certificate_serial`. contentctl writes these verbatim into savedsearches.conf, so any ES instance running an ESCU or contentctl-built app contains them — around a third of ESCU threat objects use a spelling absent from the RBA list. Importers must accept them, and must not rewrite them: the same detection's `splunk-contentctl` deployment requires the contentctl spelling.\n\nNear-equivalents across the two, for anyone normalising downstream: `ip_address`/`ip`, `domain`/`url_domain`, `email_subject`/`subject`, `tls_hash`/`ja3_hash`, `certificate_*`/`ssl_*`. Three contentctl values have no RBA counterpart — `process` and `signature` have no equivalent at all, and `system` is a risk-object type used as a threat object. Do not translate blindly.\n\nUse `other` for anything genuinely outside both lists.",
                 "enum": [
-                  "app", "ssid", "url_domain", "url", "http_user_agent", "http_referrer",
-                  "ip", "asn", "location", "command", "user", "subject",
-                  "file_name", "file_hash",
-                  "parent_process", "parent_process_name", "parent_process_path", "parent_process_hash",
-                  "process_name", "process_hash", "process_path",
-                  "registry_path", "registry_hive", "registry_key_name",
-                  "registry_value_name", "registry_value_text", "registry_value_data", "registry_value_type",
-                  "service", "service_name", "service_path", "service_hash",
-                  "service_dll", "service_dll_path", "service_dll_hash",
-                  "ssl_certificate", "ssl_issuer_common_name", "ssl_subject_common_name",
-                  "ssl_issuer_organization", "ssl_subject_organization",
-                  "ssl_issuer_unit", "ssl_subject_unit", "ssl_serial",
-                  "ja3_hash", "ja4_hash", "jarm_hash", "cyu_hash",
+                  "app",
+                  "ssid",
+                  "url_domain",
+                  "url",
+                  "http_user_agent",
+                  "http_referrer",
+                  "ip",
+                  "asn",
+                  "location",
+                  "command",
+                  "user",
+                  "subject",
+                  "file_name",
+                  "file_hash",
+                  "parent_process",
+                  "parent_process_name",
+                  "parent_process_path",
+                  "parent_process_hash",
+                  "process_name",
+                  "process_hash",
+                  "process_path",
+                  "registry_path",
+                  "registry_hive",
+                  "registry_key_name",
+                  "registry_value_name",
+                  "registry_value_text",
+                  "registry_value_data",
+                  "registry_value_type",
+                  "service",
+                  "service_name",
+                  "service_path",
+                  "service_hash",
+                  "service_dll",
+                  "service_dll_path",
+                  "service_dll_hash",
+                  "ssl_certificate",
+                  "ssl_issuer_common_name",
+                  "ssl_subject_common_name",
+                  "ssl_issuer_organization",
+                  "ssl_subject_organization",
+                  "ssl_issuer_unit",
+                  "ssl_subject_unit",
+                  "ssl_serial",
+                  "ja3_hash",
+                  "ja4_hash",
+                  "jarm_hash",
+                  "cyu_hash",
+                  "certificate_common_name",
+                  "certificate_organization",
+                  "certificate_serial",
+                  "certificate_unit",
+                  "domain",
+                  "email_address",
+                  "email_subject",
+                  "file_path",
+                  "ip_address",
+                  "process",
+                  "signature",
+                  "system",
+                  "tls_hash",
                   "other"
                 ]
               }
@@ -203,7 +326,10 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["name", "search"],
+        "required": [
+          "name",
+          "search"
+        ],
         "properties": {
           "name": {
             "type": "string",
@@ -216,14 +342,24 @@
             "description": "Drilldown SPL. Supports `$field$` token substitution from the notable."
           },
           "earliest_offset": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Start of the drilldown's search window. Commonly `$info_min_time$` — the notable's own window start.",
-            "examples": ["$info_min_time$"]
+            "examples": [
+              "$info_min_time$"
+            ]
           },
           "latest_offset": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "End of the drilldown's search window. Commonly `$info_max_time$`.",
-            "examples": ["$info_max_time$"]
+            "examples": [
+              "$info_max_time$"
+            ]
           }
         }
       }
@@ -232,9 +368,18 @@
       "type": "object",
       "description": "Escape hatch for raw savedsearches.conf keys this sub-schema does not model. Keys and values are passed through verbatim, so they must be spelled exactly as Splunk expects. Prefer a modelled field where one exists — anything placed here is unvalidated and invisible to tooling.",
       "additionalProperties": {
-        "type": ["string", "integer", "boolean"]
+        "type": [
+          "string",
+          "integer",
+          "boolean"
+        ]
       },
-      "examples": [{ "action.correlationsearch.annotations": "{}", "dispatch.ttl": "2p" }]
+      "examples": [
+        {
+          "action.correlationsearch.annotations": "{}",
+          "dispatch.ttl": "2p"
+        }
+      ]
     }
   }
 }

@@ -180,12 +180,12 @@ deployments:                                      # where + how it runs
     mode: alert
     lifecycle: live                               # overrides top-level
     config:                                       # free-form, platform-scoped; UDLF validates nothing here
-      schedule: { frequency: "*/10 * * * *", lookback: "-15m" }
+      schedule: { cron: "*/10 * * * *", lookback: "-15m" }
       suppression: { fields: [dest, SourceImage], window: "24h" }
       rba:                                        # mode=alert -> notable + risk
-        risk_score: 70
-        risk_objects: [{ field: dest, type: system }]
-        threat_objects: [{ field: SourceImage, type: process }]
+        message: "Process injection from $SourceImage$ on $dest$"
+        risk_objects: [{ field: dest, type: system, score: 70 }]   # score is per object
+        threat_objects: [{ field: SourceImage, type: process_name }]
   - name: sentinel-prod
     platform: sentinel
     mode: warranty                                # lifecycle omitted -> inherits `testing`
@@ -441,9 +441,16 @@ multi-query correlation — see the correlation decision in the v0.3.0 roadmap.
 Each sub-schema mirrors what *its own* deployer actually enforces, so they differ where the tools
 differ. Two examples worth knowing about, both of which the schemas will catch:
 
-- **Threat-object types.** `splunk-es` follows the [Splunk RBA type list](https://splunk.github.io/rba/searches/threat_object_types/)
-  (`ip`, `process_name`, `url_domain`, …); contentctl enforces its own shorter, normalised list
-  (`ip_address`, `process`, `domain`, …). The same concept, spelled differently.
+- **Threat-object types.** Two vocabularies are in circulation for the same concept: the
+  [Splunk RBA community list](https://splunk.github.io/rba/searches/threat_object_types/)
+  (`ip`, `process_name`, `url_domain`, …) and contentctl's own (`ip_address`, `process`,
+  `domain`, …). ES itself constrains neither — `threat_object_type` is a free string on the risk
+  event — and contentctl writes its spelling verbatim into `savedsearches.conf`, so roughly a third
+  of ESCU threat objects use a value absent from the RBA list. `splunk-es` therefore accepts
+  **both**, since a live ES instance genuinely contains both; `splunk-contentctl` accepts only
+  contentctl's, because that is what its build enforces. Prefer the RBA spelling when authoring
+  new content, and do not rewrite between the two on import — a detection carrying both
+  deployments needs each spelling intact.
 - **Suppression windows.** Splunk accepts days; contentctl accepts seconds, minutes and hours only,
   so one day must be written `86400s`, `1440m` or `24h`.
 
