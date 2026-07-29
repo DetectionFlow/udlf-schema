@@ -70,12 +70,16 @@ detection_content:
       level: low
 
 # Provenance to the upstream Sigma rule is a typed link, not metadata.source_url.
+# target is a default-branch permalink; license + modification carry the redistribution
+# obligations (attribution link, changed-file notice) that this copy inherits.
 links:
   - type: derived_from
     source_format: sigma
     target: https://github.com/SigmaHQ/sigma/blob/master/rules/windows/process_creation/proc_creation_win_schtasks_creation.yml
     source_id: 92626ddd-662c-49e3-ac59-f6535f12d189
     source_version: "2025-10-22"
+    license: https://github.com/SigmaHQ/Detection-Rule-License
+    modification: Translated from Sigma YAML into UDLF v0.2.0; detection logic unchanged.
 
 deployments:
   - name: sentinel-prod

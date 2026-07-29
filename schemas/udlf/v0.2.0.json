@@ -282,11 +282,11 @@
     },
     "links": {
       "type": "array",
-      "description": "Typed relationships to other detections, strategies, or sources. Validated loosely: 'type' and 'target' are required; type-specific fields (e.g. derived_from's source_format/source_id/source_version) are allowed but not enforced.",
+      "description": "Typed relationships to other detections, strategies, or sources. 'type' and 'target' are required; the type-specific fields below are optional and scoped by convention to the type named in their description. The object is closed — 'type' is a closed enum, so a new link kind needs a schema bump anyway, and rejecting undeclared keys catches a misspelt 'license' rather than silently dropping a redistribution obligation.",
       "items": {
         "type": "object",
         "required": ["type", "target"],
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "type": {
             "type": "string",
@@ -295,7 +295,30 @@
           },
           "target": {
             "type": "string",
-            "description": "The related resource, as a UUID or URI."
+            "description": "The related resource, as a UUID or URI. For a 'derived_from' link to a public source this is a permalink to the upstream rule on its default branch — stable across syncs, unlike a commit permalink. Imports from a customer's own SIEM have no public URL and keep an internal scheme (e.g. 'splunk:<id>')."
+          },
+          "source_id": {
+            "type": "string",
+            "description": "derived_from: the source's own identifier (e.g. the upstream Sigma or ESCU rule UUID)."
+          },
+          "source_format": {
+            "type": "string",
+            "description": "derived_from: the format the detection was translated from (e.g. sigma, escu, splunk). Open/extensible.",
+            "examples": ["sigma", "escu", "splunk", "elastic"]
+          },
+          "source_version": {
+            "type": "string",
+            "description": "derived_from: the source's own version — an ESCU/Elastic integer, a Sigma 'modified' date, or a commit SHA. Not the import date."
+          },
+          "license": {
+            "type": "string",
+            "format": "uri",
+            "description": "derived_from: URL of the licence the source is distributed under (e.g. https://github.com/SigmaHQ/Detection-Rule-License, https://www.apache.org/licenses/LICENSE-2.0). A URL rather than an SPDX identifier because it doubles as the attribution link some source licences require on redistribution. Optional in the schema — an import from a customer's own SIEM has no upstream licence — but a translator of public content should always emit it, alongside 'target' and 'modification'.",
+            "examples": ["https://github.com/SigmaHQ/Detection-Rule-License", "https://www.apache.org/licenses/LICENSE-2.0"]
+          },
+          "modification": {
+            "type": "string",
+            "description": "derived_from: prominent notice stating how the source was changed, as required by licences such as Apache-2.0 section 4(b). E.g. 'Translated from Sigma YAML into UDLF v0.2.0; detection logic unchanged.'"
           }
         }
       }
