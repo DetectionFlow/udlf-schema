@@ -52,6 +52,12 @@ decommissioned`) is maturity. A deployment's `mode` (`alert | warranty | monitor
 is runtime behaviour. They are independent — a `live` detection can sit in `warranty` on a new
 platform. Never use one to express the other.
 
+**6. Decommissioning is a move, not a delete.** Set `lifecycle: decommissioned` on the detection,
+set `lifecycle: decommissioned` on every entry in `deployments`, then move the file to
+`detections/decommissioned/`. Keep each deployment's `config` intact — it is the record of how the
+detection ran, which is what makes the retirement auditable and the detection revivable. Bump the
+version and append a changelog entry saying why it was retired, as with any other edit.
+
 ## Scope
 
 One logical change at a time. Touch the detections the task names and no others — a schema

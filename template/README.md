@@ -10,7 +10,8 @@ This repository contains detection rules in [Universal Detection Lifecycle Forma
     ├── network/              # Network detection rules
     ├── application/          # Application/identity detection rules
     ├── cloud/                # clouddetection rules    
-    └── other/                # Other detection rules
+    ├── other/                # Other detection rules
+    └── decommissioned/       # Retired detections, kept for audit and revival
 └── hunting/                  # UDLF files for hunting queries
 └── detection-strategies/     # Detection strategy UDLF yaml
 ```
