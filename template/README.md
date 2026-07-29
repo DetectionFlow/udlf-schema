@@ -15,3 +15,9 @@ This repository contains detection rules in [Universal Detection Lifecycle Forma
 └── detection-strategies/     # Detection strategy UDLF yaml
 ```
 
+## Working with agents
+
+If coding agents author or edit detections in this repo, copy the templates from
+[`agents/`](../agents/) in the udlf-schema repo — an `AGENTS.md` with the guardrails agents need,
+plus skills for authoring detections and importing from Splunk ES.
+
