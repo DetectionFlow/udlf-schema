@@ -292,18 +292,74 @@ to express a false-positive test).
 
 ### links
 
-Typed relationships, validated loosely: `type` (enum) and `target` (uuid or uri) are required;
-type-specific fields are permitted but not enforced.
+Typed relationships. `type` (enum) and `target` (uuid or uri) are required; the type-specific fields
+below are optional, and scoped by convention — not by validation — to the type they belong to.
+
+Link items are **closed** (`additionalProperties: false`). `type` is a closed enum, so a new link
+kind needs a schema change regardless and openness would buy no extensibility; closing instead
+catches a misspelt `license` key, which would otherwise validate clean while silently dropping a
+redistribution obligation.
 
 | type | purpose | extra fields |
 |------|---------|--------------|
-| `derived_from` | Provenance to an imported source. | `source_format`, `source_id`, `source_version` |
+| `derived_from` | Provenance to an imported source. | `source_format`, `source_id`, `source_version`, `license`, `modification` |
 | `supersedes` / `superseded_by` | Version succession. | — |
 | `related` | Loose association. | — |
 | `part_of_strategy` | Membership in a strategy. | — |
 
-`source_version` tracks the source's own version (ESCU/Elastic integer, Sigma `modified` date,
-or a commit SHA), not the import date.
+#### derived_from
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `source_id` | string | The source's own identifier — the upstream Sigma/ESCU rule UUID. |
+| `source_format` | string | Format translated from (`sigma`, `escu`, `splunk`, …). Open/extensible. |
+| `source_version` | string | The source's own version: ESCU/Elastic integer, Sigma `modified` date, or a commit SHA. **Not** the import date. |
+| `license` | string (uri) | URL of the licence the source is distributed under. |
+| `modification` | string | Prominent notice of how the source was changed. |
+
+`target` is a **permalink to the upstream rule on its default branch**, not a commit permalink: a
+branch permalink is stable across syncs and changes only when the upstream path changes, whereas a
+commit sha would rewrite every derived document on every sync. Record the exact commit a sync
+translated from once, in a manifest, not in thousands of documents. An import from a customer's own
+SIEM has no public URL and keeps an internal scheme (`splunk:<id>`).
+
+`license` is a **URL, not an SPDX identifier**, because it doubles as the attribution hyperlink some
+source licences require on redistribution — SigmaHQ's Detection Rule License 1.1 asks for "a URI or
+hyperlink to the Rule set or explicit Rule". The trade-off is that a URL is not machine-comparable,
+so licence-class filtering means string-matching URLs.
+
+`modification` carries the changed-file notice that licences such as Apache-2.0 §4(b) require —
+translating an upstream YAML rule into a UDLF document is a modification. There is no separate
+`modified: true` flag: it would be true wherever it appeared, and the notice says more.
+
+Both are **optional in the schema**, because one producer legitimately has neither: importing from a
+customer's own SIEM has no upstream licence. Requiring them would make every SIEM-imported detection
+invalid. Enforce them where the claim is actually true — a translator of public content should always
+emit `license`, `target` and `modification`, and a build job that publishes such content should
+assert all three are present.
+
+Redistribution obligations follow the copy: a tool that copies a detection into another repository
+must **propagate** the existing `derived_from` link rather than synthesise a bare one, since that
+copy is itself a distribution event.
+
+```yaml
+links:
+  - type: derived_from
+    target: https://github.com/SigmaHQ/sigma/blob/master/rules/application/bitbucket/bitbucket_full_data_export_triggered.yml
+    source_id: 195e1b9d-bfc2-4ffa-ab4e-35aef69815f8
+    source_format: sigma
+    license: https://github.com/SigmaHQ/Detection-Rule-License
+    modification: Translated from Sigma YAML into UDLF v0.2.0; detection logic unchanged.
+  - type: derived_from
+    target: https://github.com/splunk/security_content/blob/develop/detections/cloud/o365_concurrent_sessions_from_different_ips.yml
+    source_id: 58e034de-1f87-4812-9dc3-a4f68c7db930
+    source_format: escu
+    source_version: "14"
+    license: https://www.apache.org/licenses/LICENSE-2.0
+    modification: Translated from Splunk ESCU YAML into UDLF v0.2.0; detection logic unchanged.
+```
+
+Author attribution for the upstream rule stays in `metadata.authors`.
 
 ### deployments
 
