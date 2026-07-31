@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://detectionflow.com/schemas/udlf/macro/v0.1.0.json",
+  "title": "UDLF Macro Schema v0.1.0",
+  "description": "Universal Detection Lifecycle Format (UDLF) macro schema. A macro is a named, reusable snippet of query logic that a detection references by name via its 'requires' block. Each document holds exactly one language, because a macro is not portable: the three platforms that support the primitive at all express it differently (a Splunk macros.conf stanza expanded as text, a Sentinel savedSearches function with a functionAlias, a LogScale saved query invoked as $\"name\"()). A KQL equivalent of an SPL macro is therefore a separate document reusing the same 'name'; a deployer resolves a detection's requirement on (name, language). Platforms with no macro primitive (Elastic, Google SecOps, Cortex XSIAM, SentinelOne) are absent from the language enum by design — a macro that could never be materialised should not be authorable. A Splunk tuning filter is not a special case; it is an ordinary macro with an spl definition.",
+  "type": "object",
+  "required": ["id", "name", "title", "metadata", "language", "definition"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this macro document (UUID v4). Each language variant is its own document with its own id, so a detection's 'requires' entry names the macro rather than pinning an id."
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,63}$",
+      "description": "The token the macro is referenced by, both in detection logic and in a detection's 'requires' block (e.g. 'security_content_summariesonly'). Shared across the language variants of the same logical macro. The pattern is the safe intersection of all three targets — Sentinel requires a valid KQL identifier for functionAlias, which is stricter than Splunk's macro naming."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Human-readable title. Maps to Sentinel's savedSearches 'displayName' at deploy time."
+    },
+    "description": {
+      "type": "string",
+      "description": "What the macro does and when to use it."
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Provenance and versioning metadata.",
+      "required": ["created_at", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "created_at": {
+          "type": "string",
+          "format": "date",
+          "description": "ISO 8601 date the macro was created (YYYY-MM-DD)."
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "description": "Semantic version number (e.g. 1.0.0, 2.1.3)."
+        },
+        "authors": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Authors of the macro."
+        }
+      }
+    },
+    "language": {
+      "type": "string",
+      "enum": ["spl", "kql", "cql"],
+      "description": "Query language of this macro, and by extension the family of platforms it can be deployed to: 'spl' -> Splunk (macros.conf stanza), 'kql' -> Microsoft Sentinel (savedSearches with a functionAlias), 'cql' -> CrowdStrike NG-SIEM / Falcon LogScale (saved query called as $\"name\"()). Closed to these three because no other supported platform has a macro primitive."
+    },
+    "arguments": {
+      "type": "array",
+      "description": "Ordered parameter list, if this is a parameterised macro. Omit entirely for a zero-argument macro — for Splunk the count is load-bearing rather than cosmetic, since arity is encoded in the stanza name ('[name(2)]' and '[name]' are different macros). Substitution is positional, and the argument names must match the tokens used in 'definition' ($name$ for spl, a bare identifier for kql, ?name for cql).",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_]*$",
+            "description": "Parameter name, as it appears at the substitution point in 'definition'."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "string",
+              "long",
+              "int",
+              "real",
+              "bool",
+              "datetime",
+              "timespan",
+              "dynamic",
+              "guid"
+            ],
+            "description": "Scalar type of the parameter. Required for 'kql' and forbidden elsewhere: a Sentinel function declares a typed signature ('functionParameters: argSpan: timespan') and cannot be created without it, whereas Splunk and LogScale parameters are untyped."
+          },
+          "default": {
+            "description": "Default value used when the caller omits this argument. Must be a scalar literal. Forbidden for 'spl' (Splunk macros have no defaults). For 'kql', defaulted parameters must come after non-defaulted ones, and the value cannot be a computed expression such as ago(20d). For 'cql' this maps to the ?{name=default} form, which LogScale honours in saved searches but ignores in the UI and dashboards."
+          }
+        }
+      }
+    },
+    "definition": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The macro body — the raw query text the macro expands to or evaluates as. Deploy-neutral: it carries logic only, never the surrounding platform object's mechanics (Sentinel's savedSearches 'category', the LogScale repository or view, app or index placement). Those are the deployer's concern, for the same reason a detection's schedule lives in 'deployments[].config' rather than in its logic."
+    },
+    "references": {
+      "type": "array",
+      "items": { "type": "string", "format": "uri" },
+      "description": "External reading URLs."
+    },
+    "changelog": {
+      "type": "array",
+      "description": "Append-only, chronological record of notable changes. Placed last as it grows unbounded. Replaces a separate 'updated_at' — the most recent entry's date is the effective last-updated date, and each entry's 'version' ties a change to the release it shipped in.",
+      "items": {
+        "type": "object",
+        "required": ["date", "version", "author", "summary"],
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "ISO 8601 date of the change (YYYY-MM-DD)."
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+            "description": "Semantic version this change shipped in (e.g. 1.0.0)."
+          },
+          "author": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Who made the change."
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What changed and why."
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["language"],
+        "properties": { "language": { "const": "kql" } }
+      },
+      "then": {
+        "properties": {
+          "arguments": {
+            "items": { "required": ["name", "type"] }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["language"],
+        "properties": { "language": { "const": "spl" } }
+      },
+      "then": {
+        "properties": {
+          "arguments": {
+            "items": {
+              "not": {
+                "anyOf": [
+                  { "required": ["type"] },
+                  { "required": ["default"] }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["language"],
+        "properties": { "language": { "const": "cql" } }
+      },
+      "then": {
+        "properties": {
+          "arguments": {
+            "items": { "not": { "required": ["type"] } }
+          }
+        }
+      }
+    }
+  ]
+}

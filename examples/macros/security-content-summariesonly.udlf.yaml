@@ -1,0 +1,25 @@
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/macro/v0.1.0.json
+#
+# A zero-argument SPL macro. Omitting 'arguments' entirely matters on Splunk:
+# arity is encoded in the macros.conf stanza name, so [name] and [name(1)]
+# are two different macros.
+id: 36ffc9a4-dbc9-4337-8996-94ad6cb671c8
+name: security_content_summariesonly
+title: Summaries-only data model access
+
+description: >-
+  Constrains an accelerated data model search to summarised data only. Referenced
+  as the first term of a tstats search so that every detection shares one
+  acceleration policy rather than restating it.
+
+metadata:
+  created_at: "2026-07-31"
+  version: "1.0.0"
+  authors:
+    - Detection Engineering Team
+
+language: spl
+definition: summariesonly=true allow_old_summaries=true fillnull_value=null
+
+references:
+  - https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Definesearchmacros

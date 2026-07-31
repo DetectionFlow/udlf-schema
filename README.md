@@ -26,6 +26,8 @@ UDLF provides a vendor-neutral format for representing security detection rules,
 |------|-------------|
 | `schemas/udlf/v0.2.1.json` | JSON Schema for UDLF detections |
 | `schemas/udlf/strategy/v0.2.0.json` | JSON Schema for UDLF strategies (grouping of detections) |
+| `schemas/udlf/macro/v0.1.0.json` | JSON Schema for UDLF macros (reusable query snippets referenced by a detection's `requires`) |
+| `schemas/udlf/lookup/v0.1.0.json` | JSON Schema for UDLF lookups (reference datasets referenced by a detection's `requires`) |
 | `schemas/udlf/config/<platform>/v0.1.0.json` | Optional, opt-in sub-schemas for a deployment's `config` block (splunk, splunk-es, splunk-contentctl-v5-6, sentinel, defender-for-endpoint, crowdstrike, sentinel-one) |
 | `udlf-specification.md` | Full specification document |
 
@@ -76,6 +78,12 @@ Add the matching header to your files:
 
 # strategies (examples/strategies/*.udlf.yaml)
 # yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/strategy/v0.2.0.json
+
+# macros (examples/macros/*.udlf.yaml)
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/macro/v0.1.0.json
+
+# lookups (examples/lookups/*.udlf.yaml)
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/lookup/v0.1.0.json
 ```
 
 ### Programmatic Validation
@@ -85,6 +93,15 @@ Use `check-jsonschema`, which resolves the remote Sigma `$ref` used by `language
 ```bash
 uvx check-jsonschema --schemafile schemas/udlf/v0.2.1.json examples/*.udlf.yaml
 uvx check-jsonschema --schemafile schemas/udlf/strategy/v0.2.0.json examples/strategies/*.udlf.yaml
+uvx check-jsonschema --schemafile schemas/udlf/macro/v0.1.0.json examples/macros/*.udlf.yaml
+uvx check-jsonschema --schemafile schemas/udlf/lookup/v0.1.0.json examples/lookups/*.udlf.yaml
+```
+
+A lookup's `key`, `columns` and sibling CSV are cross-references that JSON Schema
+cannot reach, so they need a second pass:
+
+```bash
+./scripts/validate-lookups.py examples/lookups/*.udlf.yaml
 ```
 
 ## Related Projects
