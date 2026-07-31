@@ -26,7 +26,7 @@ UDLF provides a vendor-neutral format for representing security detection rules,
 |------|-------------|
 | `schemas/udlf/v0.2.0.json` | JSON Schema for UDLF detections |
 | `schemas/udlf/strategy/v0.2.0.json` | JSON Schema for UDLF strategies (grouping of detections) |
-| `schemas/udlf/config/<platform>/v0.1.0.json` | Optional, opt-in sub-schemas for a deployment's `config` block (splunk, splunk-es, splunk-contentctl, sentinel, defender-for-endpoint, crowdstrike, sentinel-one) |
+| `schemas/udlf/config/<platform>/v0.1.0.json` | Optional, opt-in sub-schemas for a deployment's `config` block (splunk, splunk-es, splunk-contentctl-v5-6, sentinel, defender-for-endpoint, crowdstrike, sentinel-one) |
 | `udlf-specification.md` | Full specification document |
 
 Each schema's path under `schemas/` mirrors its `$id` path, so the directory can be served
@@ -43,7 +43,7 @@ directly at the published URLs and superseded versions stay resolvable alongside
 │       └── config/                   # Opt-in per-platform deployment config sub-schemas
 │           ├── splunk/v0.1.0.json
 │           ├── splunk-es/v0.1.0.json
-│           ├── splunk-contentctl/v0.1.0.json
+│           ├── splunk-contentctl-v5-6/v0.1.0.json
 │           ├── sentinel/v0.1.0.json
 │           ├── defender-for-endpoint/v0.1.0.json
 │           ├── crowdstrike/v0.1.0.json

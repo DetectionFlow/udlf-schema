@@ -46,7 +46,7 @@ infrastructure and secrets for that endpoint, selects the matching logic variant
 (e.g. `platform: splunk-es` → the `spl` variant), translates or compiles as needed, and pushes it
 in the requested `mode` with any platform-specific `config` (`schedule` / `suppression` / `rba` / …).
 `platform` also picks the delivery path: `splunk-es` means the deployer builds and uploads an app
-itself, while `splunk-contentctl` means it emits a contentctl-shaped detection and lets the
+itself, while `splunk-contentctl-v5-6` means it emits a contentctl-shaped detection and lets the
 contentctl pipeline do the build. The `deployments` block is
 a **directive**: UDLF says *what* to deploy and *how it should behave*; the deployer — per-org
 custom code or example scripts — turns that into a real pipeline. Engineers (human or AI) can read
@@ -371,7 +371,7 @@ connection details are **never** here — they resolve from the endpoint by the 
 | Field | Required | Type | Notes |
 |-------|:---:|------|-------|
 | `name` | | string | Friendly name for a specific endpoint (`splunk-prod`, `splunk-staging`). Resolved to real infra/secrets. Omit when a platform has one endpoint. Listed first so entries read name-then-platform across multiple endpoints. |
-| `platform` | ✓ | string | Deployment target and the **discriminator**. Known: `splunk`, `splunk-es`, `splunk-contentctl`, `elastic`, `sentinel`. Selects the logic variant and **scopes the meaning of `config`**. Usually a product, but may name a delivery toolchain where that changes the shape of `config` — see [delivery paths](#when-a-platform-is-a-toolchain). Open/extensible — unknown values validate on the common fields only. |
+| `platform` | ✓ | string | Deployment target and the **discriminator**. Known: `splunk`, `splunk-es`, `splunk-contentctl-v5-6`, `elastic`, `sentinel`. Selects the logic variant and **scopes the meaning of `config`**. Usually a product, but may name a delivery toolchain where that changes the shape of `config` — see [delivery paths](#when-a-platform-is-a-toolchain). Open/extensible — unknown values validate on the common fields only. |
 | `mode` | ✓ | enum | `alert` \| `warranty` \| `monitoring` \| `disabled` (see [modes](#two-independent-axes-lifecycle-and-mode)). The **only** cross-vendor runtime axis. |
 | `lifecycle` | | enum | Per-deployment stage; inherits top-level when omitted. |
 | `config` | | object | **Free-form, platform-scoped** (`additionalProperties: true`). Holds all platform-specific deployment policy and vendor round-trip fidelity: `schedule`, `suppression`, `rba`, and vendor-only fields. The core schema validates **nothing** inside it. Optional [config sub-schemas](#config-sub-schemas-opt-in) describe the known shapes and can be applied as a separate pass. |
@@ -407,18 +407,29 @@ two delivery paths to the same product produce genuinely different config, they 
 |---|---|---|
 | `splunk` | Splunk Enterprise | Deployer builds a custom app and uploads it. Standard `savedsearches.conf` only — no ES features assumed. |
 | `splunk-es` | Splunk Enterprise Security | Same build-and-upload path, plus ES notable events and Risk-Based Alerting. |
-| `splunk-contentctl` | Splunk Enterprise / ES | Deployer emits a contentctl-shaped detection and hands it to the **contentctl** pipeline, which validates, builds and tests the app itself. |
+| `splunk-contentctl-v5-6` | Splunk Enterprise / ES | Deployer emits a **contentctl v5.6**-shaped detection and hands it to the contentctl pipeline, which validates, builds and tests the app itself. |
 
-The split is not cosmetic. Under `splunk-contentctl` the config is not a superset of `splunk-es` —
+A toolchain value carries the **tool version** when that tool's format is not stable across major
+versions, as contentctl's is not — Splunk's own `security_content` has moved to a 6.3-era shape,
+and the two are different enough that one config shape cannot describe both without becoming a
+union that validates neither faithfully. So `splunk-contentctl-v5-6` says exactly what it means:
+the config must be convertible into a **contentctl v5.6** detection, 5.6 being the last release of
+the 5.x line. If a v6.3 path is modelled later it becomes a *sibling* value —
+`splunk-contentctl-v6-3` — not a redefinition of this one, so existing detections keep validating
+and a detection that ships down both pipelines simply carries a deployment for each. Generic
+Splunk ES delivery, where the deployer owns the build, stays on `splunk-es` and is unaffected by
+any of this.
+
+The split is not cosmetic. Under `splunk-contentctl-v5-6` the config is not a superset of `splunk-es` —
 it is differently shaped, because contentctl owns the build. Its `type`
 (`TTP` | `Anomaly` | `Hunting` | `Correlation`) is the real discriminator: it selects one of the
 five built-in ESCU deployments by name, which supplies the schedule, and it decides whether
-notables and RBA are emitted at all. That is why a `splunk-contentctl` config has no `schedule`
+notables and RBA are emitted at all. That is why a `splunk-contentctl-v5-6` config has no `schedule`
 block, and why `rba` is *forbidden* on `Hunting` and `Correlation` rather than merely optional.
 
 The same detection can carry several of these at once — see
 `examples/process-injection-multi-deployment.udlf.yaml`, which ships one detection to `splunk-es`
-directly and to `splunk-contentctl` as part of a content pack.
+directly and to `splunk-contentctl-v5-6` as part of a content pack.
 
 #### Not every platform is a scheduled search
 
@@ -448,7 +459,7 @@ explicit pass when you want the block checked:
 |---|---|
 | `splunk` | `schemas/udlf/config/splunk/v0.1.0.json` |
 | `splunk-es` | `schemas/udlf/config/splunk-es/v0.1.0.json` |
-| `splunk-contentctl` | `schemas/udlf/config/splunk-contentctl/v0.1.0.json` |
+| `splunk-contentctl-v5-6` | `schemas/udlf/config/splunk-contentctl-v5-6/v0.1.0.json` |
 | `sentinel` | `schemas/udlf/config/sentinel/v0.1.0.json` |
 | `defender-for-endpoint` | `schemas/udlf/config/defender-for-endpoint/v0.1.0.json` |
 | `crowdstrike` | `schemas/udlf/config/crowdstrike/v0.1.0.json` |
@@ -472,12 +483,17 @@ The pin is exact rather than compatible-within-major: pre-1.0 semver makes no co
 promise, so a block pinned to `0.1.0` keeps validating against `0.1.0` after a later revision
 ships. Omit `schema` to validate against the highest revision available.
 
+Where a platform name carries a **tool** version, the two numbers are unrelated axes and
+`splunk-contentctl-v5-6::0.1.0` reads as both at once: the platform fixes the target format
+(contentctl v5.6), while the `0.1.0` versions UDLF's mapping onto it. A fix to how UDLF maps a
+field bumps the sub-schema; a new contentctl major is a new platform value, because it is a
+different target rather than a revision of this one.
+
 Because the sub-schemas are opt-in, they are **closed** (`additionalProperties: false`) — you only
-run one when you want strictness, so an unrecognised key is a typo rather than vendor drift. The
-`splunk` and `splunk-es` shapes provide an `advanced` map as the pressure valve for raw
-`savedsearches.conf` keys they do not model. Every shape except
-`splunk-contentctl` provides an `advanced` map as the pressure valve for raw vendor keys it does
-not model. `splunk-contentctl` deliberately has no such escape hatch: contentctl's own models
+run one when you want strictness, so an unrecognised key is a typo rather than vendor drift. Every
+shape except `splunk-contentctl-v5-6` provides an `advanced` map as the pressure valve for raw
+vendor keys it does not model — raw `savedsearches.conf` keys in the case of the Splunk shapes.
+`splunk-contentctl-v5-6` deliberately has no such escape hatch: contentctl's own models
 forbid extra keys, so an unmodelled field would fail its build anyway.
 
 Every shape leaves out the same things, because UDLF already owns them elsewhere: the query
@@ -503,7 +519,7 @@ differ. Two examples worth knowing about, both of which the schemas will catch:
   `domain`, …). ES itself constrains neither — `threat_object_type` is a free string on the risk
   event — and contentctl writes its spelling verbatim into `savedsearches.conf`, so roughly a third
   of ESCU threat objects use a value absent from the RBA list. `splunk-es` therefore accepts
-  **both**, since a live ES instance genuinely contains both; `splunk-contentctl` accepts only
+  **both**, since a live ES instance genuinely contains both; `splunk-contentctl-v5-6` accepts only
   contentctl's, because that is what its build enforces. Prefer the RBA spelling when authoring
   new content, and do not rewrite between the two on import — a detection carrying both
   deployments needs each spelling intact.

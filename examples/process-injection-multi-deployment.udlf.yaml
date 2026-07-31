@@ -138,13 +138,15 @@ deployments:
   # Same product, different delivery path: rather than building and uploading an
   # app, the deployer emits a contentctl-shaped detection and lets the contentctl
   # pipeline validate, build and test it. `type` is the discriminator — it picks
-  # the ESCU default deployment, so there is no `schedule` block here.
+  # the ESCU default deployment, so there is no `schedule` block here. The tool
+  # version is part of the platform name because contentctl's format is not
+  # stable across majors; this config must convert to a contentctl v5.6 detection.
   - name: escu-content-pack
-    platform: splunk-contentctl
+    platform: splunk-contentctl-v5-6
     mode: alert
     lifecycle: development
     config:
-      schema: splunk-contentctl::0.1.0
+      schema: splunk-contentctl-v5-6::0.1.0
       type: TTP                      # -> ESCU Default Configuration TTP: notable + RBA
       data_source:
         - Sysmon EventID 8
