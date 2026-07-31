@@ -84,7 +84,8 @@
             "description": "Scalar type of the parameter. Required for 'kql' and forbidden elsewhere: a Sentinel function declares a typed signature ('functionParameters: argSpan: timespan') and cannot be created without it, whereas Splunk and LogScale parameters are untyped."
           },
           "default": {
-            "description": "Default value used when the caller omits this argument. Must be a scalar literal. Forbidden for 'spl' (Splunk macros have no defaults). For 'kql', defaulted parameters must come after non-defaulted ones, and the value cannot be a computed expression such as ago(20d). For 'cql' this maps to the ?{name=default} form, which LogScale honours in saved searches but ignores in the UI and dashboards."
+            "type": ["string", "number", "boolean"],
+            "description": "Default value used when the caller omits this argument. Constrained to a scalar because neither target can express a composite one: a Sentinel function default must be a scalar literal, and LogScale's ?{name=default} form substitutes text. Forbidden for 'spl' (Splunk macros have no defaults). For 'kql' the value also cannot be a computed expression such as ago(20d), which the schema cannot detect, and defaulted parameters must come after non-defaulted ones — scripts/validate-macros.py enforces that ordering."
           }
         }
       }

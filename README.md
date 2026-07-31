@@ -97,10 +97,12 @@ uvx check-jsonschema --schemafile schemas/udlf/macro/v0.1.0.json examples/macros
 uvx check-jsonschema --schemafile schemas/udlf/lookup/v0.1.0.json examples/lookups/*.udlf.yaml
 ```
 
-A lookup's `key`, `columns` and sibling CSV are cross-references that JSON Schema
-cannot reach, so they need a second pass:
+Macros and lookups each carry rules JSON Schema cannot express over a list — a
+lookup's `key` naming a declared column and its sibling CSV matching `columns`, a
+KQL macro's defaulted arguments coming last — so they need a second pass:
 
 ```bash
+./scripts/validate-macros.py examples/macros/*.udlf.yaml
 ./scripts/validate-lookups.py examples/lookups/*.udlf.yaml
 ```
 

@@ -68,11 +68,18 @@ def check(path: pathlib.Path, validator: jsonschema.Draft202012Validator) -> lis
     data = doc["data"]
 
     if "file" in data:
-        if ".." in pathlib.PurePosixPath(data["file"]).parts:
-            problems.append(f"data.file: '{data['file']}' must not escape the document's directory")
+        # Resolve before checking containment. A lexical '..' test is not enough:
+        # a committed symlink pointing outside the tree would pass it, and this
+        # validator then reads the target and can echo its first line into CI
+        # logs via the header-mismatch diagnostic below.
+        directory = path.parent.resolve()
+        target = (directory / data["file"]).resolve()
+        if not target.is_relative_to(directory):
+            problems.append(
+                f"data.file: '{data['file']}' resolves outside the document's directory"
+            )
             return problems
 
-        target = path.parent / data["file"]
         if not target.is_file():
             problems.append(f"data.file: '{data['file']}' does not exist")
             return problems

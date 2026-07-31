@@ -699,6 +699,11 @@ papering over it:
 | `kql` | **required** | allowed | bare identifier | Sentinel declares a typed signature (`functionParameters: 'argSpan: timespan'`) and the function cannot be created without it. Defaults must be scalar literals and come after non-defaulted parameters. |
 | `cql` | forbidden | allowed | `?name` | LogScale parameters are untyped. Defaults map to `?{name=default}`, honoured in saved searches but ignored in the UI and dashboards. |
 
+A `default` must be a scalar — neither target can express a composite one. The "defaulted parameters
+last" rule cannot be stated in JSON Schema over an unbounded array, so `scripts/validate-macros.py`
+enforces it, along with unique argument names and the requirement that each declared argument
+actually appears at its substitution point in `definition`.
+
 `definition` carries logic only. The surrounding platform object's mechanics — Sentinel's
 `savedSearches` `category`, the LogScale repository or view, app or index placement — are the
 deployer's concern, for the same reason a schedule lives in `deployments[].config`.
@@ -819,11 +824,12 @@ uvx check-jsonschema --schemafile schemas/udlf/macro/v0.1.0.json examples/macros
 uvx check-jsonschema --schemafile schemas/udlf/lookup/v0.1.0.json examples/lookups/*.udlf.yaml
 ```
 
-A lookup's `key`, `columns` and sibling CSV are cross-references JSON Schema cannot reach — it
-cannot check that `key` names a declared column, that the file exists, or that its header matches.
-Those need a second pass:
+Macros and lookups each carry rules JSON Schema cannot express over a list of objects. It cannot
+check that a lookup's `key` names a declared column, that its sibling CSV exists with a matching
+header, or that a KQL macro's defaulted arguments come last. Those need a second pass:
 
 ```bash
+./scripts/validate-macros.py examples/macros/*.udlf.yaml
 ./scripts/validate-lookups.py examples/lookups/*.udlf.yaml
 ```
 
