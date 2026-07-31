@@ -56,8 +56,8 @@
         "properties": {
           "language": {
             "type": "string",
-            "enum": ["spl", "kql", "sigma", "yara", "yara-l", "python", "sql"],
-            "description": "Query language of this logic variant. 'sigma' embeds a native Sigma rule object."
+            "enum": ["spl", "kql", "cql", "sigma", "yara", "yara-l", "python", "sql"],
+            "description": "Query language of this logic variant. 'sigma' embeds a native Sigma rule object. 'cql' is CrowdStrike Query Language (Falcon NG-SIEM / LogScale)."
           },
           "description": {
             "type": "string",
@@ -66,7 +66,28 @@
             "description": "Short human-readable label for this variant, e.g. 'Raw log SPL version' or 'Tuned for client X'. Documentation only — it does not select a variant at deploy time."
           },
           "logic": {
-            "description": "The detection logic. A raw query string for spl/kql/yara/yara-l/python/sql; an embedded native Sigma rule object when language is 'sigma'."
+            "description": "The detection logic. A raw query string for spl/kql/cql/yara/yara-l/python/sql; an embedded native Sigma rule object when language is 'sigma'."
+          },
+          "requires": {
+            "type": "array",
+            "description": "Supporting content this variant's logic depends on — macros (reusable query snippets) and lookups (reference datasets), each authored as its own top-level UDLF document. Scoped to the variant rather than the detection because a dependency is a property of a specific logic string, not of the threat idea: two variants may share a language yet disagree (a tstats-accelerated SPL needs a summariesonly macro, its raw-log sibling does not), which a detection-level list could not express. Declared explicitly rather than parsed out of the logic, since inference would need a parser per language, and an explicit list also tells a deployer targeting a platform with no such primitive (e.g. SentinelOne, which has neither) that it must inline the content instead of creating a shared object. A macro requirement resolves on this variant's 'language' together with 'name'; a lookup resolves on name alone.",
+            "items": {
+              "type": "object",
+              "required": ["type", "name"],
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["macro", "lookup"],
+                  "description": "Which kind of supporting document this is."
+                },
+                "name": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{2,63}$",
+                  "description": "The supporting document's 'name' — the same token that appears in this variant's logic (e.g. a backticked SPL macro, or the lookup name in an 'inputlookup'). Referenced by name rather than by id because the name is what the deployer must substitute at the call site."
+                }
+              }
+            }
           }
         },
         "allOf": [

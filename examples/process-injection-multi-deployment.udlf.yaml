@@ -66,6 +66,13 @@ detection_content:
       | stats min(_time) as inject_time by dest, SourceImage, TargetImage
       | join dest [ search index=endpoint EventCode=7034 | stats min(_time) as stop_time by dest ]
       | where stop_time > inject_time
+      | lookup attacker_tools attacker_tool_names AS SourceImage OUTPUT description AS source_tool_note
+    # Only this variant needs the lookup — the KQL sibling below carries no
+    # equivalent enrichment, which is why 'requires' is scoped to the variant
+    # rather than to the detection.
+    requires:
+      - type: lookup
+        name: attacker_tools
   - language: kql
     description: Microsoft Defender XDR advanced hunting equivalent
     logic: |

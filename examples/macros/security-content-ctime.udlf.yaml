@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/macro/v0.1.0.json
+#
+# A parameterised SPL macro. Splunk parameters are untyped and have no defaults,
+# so 'type' and 'default' are forbidden when language is 'spl'. The argument name
+# matches the $field$ substitution token in the definition.
+id: 832ca4f6-6dc6-4043-9d90-f159169795e8
+name: security_content_ctime
+title: Convert epoch time to a readable string
+
+description: >-
+  Converts an epoch timestamp field to an ISO-8601-style string in place. Applied
+  to firstTime/lastTime after a stats or tstats aggregation.
+
+metadata:
+  created_at: "2026-07-31"
+  version: "1.0.0"
+  authors:
+    - Detection Engineering Team
+
+language: spl
+arguments:
+  - name: field
+
+definition: 'convert timeformat="%Y-%m-%dT%H:%M:%S" ctime($field$)'

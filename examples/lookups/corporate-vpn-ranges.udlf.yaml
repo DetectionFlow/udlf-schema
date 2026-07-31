@@ -1,0 +1,38 @@
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/lookup/v0.1.0.json
+#
+# Inline rows plus a non-default match type. Short enough to stay reviewable in
+# one diff, so it needs no sibling file. 'cidr' deploys everywhere except a
+# Sentinel watchlist, which matches its SearchKey exactly and nothing else.
+id: 2d8b5e41-9c07-4a63-b1fe-70a3c8d92f56
+name: corporate_vpn_ranges
+title: Corporate VPN egress ranges
+
+description: >-
+  Egress CIDR ranges for company-operated VPN concentrators. Used to separate
+  staff traffic from genuinely external activity in impossible-travel and
+  anomalous-egress detections.
+
+metadata:
+  created_at: "2026-07-31"
+  version: "1.0.0"
+  authors:
+    - Detection Engineering Team
+
+key: range
+match:
+  type: cidr
+
+columns:
+  - name: range
+    description: Egress range in CIDR notation.
+  - name: site
+    description: Office the concentrator serves.
+
+data:
+  rows:
+    - range: 203.0.113.0/24
+      site: london
+    - range: 198.51.100.0/24
+      site: new-york
+    - range: 192.0.2.0/25
+      site: singapore

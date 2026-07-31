@@ -1,0 +1,6 @@
+attacker_tool_names,description
+mimikatz.exe,credential dumping
+psexec.exe,remote execution and lateral movement
+procdump.exe,"process memory dumping, often against lsass"
+ngrok.exe,tunnelling to expose internal services
+rclone.exe,bulk data exfiltration to cloud storage

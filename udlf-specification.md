@@ -106,6 +106,48 @@ Sigma rule object**, validated against the pinned upstream SigmaHQ schema. This 
 existing Sigma rule in UDLF to gain lifecycle, deployment and test management while keeping the
 original rule intact and schema-validated. Trace it back to its origin with a `derived_from` link.
 
+### Supporting content: macros and lookups
+
+Real detections lean on content that does not belong inside the detection file. A **macro** is a
+reusable snippet of query logic — shared plumbing every search repeats. A **lookup** is a reference
+dataset — a list of attacker tool names, RMM binaries, or approved CIDR ranges — too large and too
+frequently changed to inline. Both are authored as their own top-level UDLF documents and referenced
+from a logic variant's `requires` block.
+
+The two behave differently because the platforms do:
+
+- **A macro is language-scoped.** Only three targets have the primitive, and each expresses it
+  differently: a Splunk `macros.conf` stanza expanded as text, a Microsoft Sentinel `savedSearches`
+  function with a `functionAlias`, a CrowdStrike LogScale saved query called as `$"name"()`. So a
+  macro document carries exactly one `language` (`spl`, `kql` or `cql`), and the KQL equivalent of an
+  SPL macro is a *separate document reusing the same `name`*. Platforms with no macro primitive —
+  Elastic, Google SecOps, Cortex XSIAM, SentinelOne — are absent from the enum by design: a macro
+  that could never be materialised should not be authorable.
+- **A lookup is not.** Reference data is language-neutral, and six of the seven modelled platforms
+  have the primitive in some form (Splunk csv lookup, Sentinel watchlist, Google SecOps reference
+  list, Elastic value list, Cortex lookup dataset, CrowdStrike lookup file). A lookup document has no
+  `language`, no `platform` and no `deployments` — it is materialised onto whatever platforms its
+  requiring detections target.
+
+A Splunk tuning filter is not a special case: it is an ordinary macro with an `spl` definition.
+
+#### Why `requires` is declared, and why per variant
+
+contentctl derives a detection's dependencies by regex-scanning the search text for backticked
+macros and `inputlookup`/`lookup` references. That works because it handles one language. UDLF
+carries several per detection, so inference would need a parser per language — and an explicit list
+does something inference cannot: it tells a deployer targeting a platform with *no* such primitive
+(SentinelOne has neither) that it must inline the content rather than create a shared object.
+
+`requires` sits inside each `detection_content` entry, not at the top level, because a dependency is
+a property of a specific logic string rather than of the threat idea. Two variants may share a
+language and still disagree — a `tstats`-accelerated SPL needs a summaries-only macro while its
+raw-log sibling does not — which a detection-level list could not express.
+
+Resolution follows from that placement: a **macro** resolves on `name` plus the enclosing variant's
+`language`; a **lookup** resolves on `name` alone. References are by name rather than by id because
+the name is the token the deployer must substitute at the call site.
+
 ## The detection object
 
 ```yaml
@@ -153,11 +195,19 @@ detection_content:                                # array of language+logic vari
   - language: spl
     description: Raw log SPL version                # optional label; only documentation
     logic: |
-      index=endpoint EventCode=10 GrantedAccess IN ("0x1F0FFF") | ...
+      index=endpoint EventCode=10 GrantedAccess IN ("0x1F0FFF")
+      | `security_content_ctime(firstTime)`
+      | lookup attacker_tools attacker_tool_names AS SourceImage OUTPUT description
+    requires:                                     # scoped to THIS variant, not the detection
+      - type: macro                               # resolves on name + this variant's language
+        name: security_content_ctime
+      - type: lookup                              # resolves on name alone
+        name: attacker_tools
   - language: kql
     description: Tuned for client X
     logic: |
       DeviceEvents | where ActionType == "CreateRemoteThread" | ...
+                                                  # no `requires` — this variant needs neither
 
 tests:
   - name: True positive - injection then service stop
@@ -221,9 +271,12 @@ changelog:                                        # top-level, last: append-only
 | `metadata.version` | ✓ | string | Semver `^\d+\.\d+\.\d+$`. |
 | `metadata.authors` | | string[] | Replaces v0.1 `created_by`. |
 | `detection_content` | | array | Logic variants; each `{ language, description?, logic }`. |
-| `detection_content[].language` | ✓* | enum | `spl`\|`kql`\|`sigma`\|`yara`\|`yara-l`\|`python`\|`sql`. |
+| `detection_content[].language` | ✓* | enum | `spl`\|`kql`\|`cql`\|`sigma`\|`yara`\|`yara-l`\|`python`\|`sql`. `cql` is CrowdStrike Query Language (Falcon NG-SIEM / LogScale). |
 | `detection_content[].description` | | string (1–256) | Short label distinguishing variants that share a language. Documentation only; not a deploy-time selector. |
 | `detection_content[].logic` | ✓* | string \| object | String query, **or** an embedded Sigma object when `language: sigma`. |
+| `detection_content[].requires` | | array | Supporting content **this variant** depends on; `{ type, name }`. |
+| `…requires[].type` | ✓* | enum | `macro`\|`lookup`. |
+| `…requires[].name` | ✓* | string | The supporting document's `name` — the same token appearing in this variant's logic. `^[a-z][a-z0-9_]{2,63}$`. |
 | `detection_context` | | object | Human context (see below). |
 | `detection_context.severity` | | enum | `critical`\|`high`\|`medium`\|`low`\|`informational`. |
 | `detection_context.description` | | string | What the detection identifies. |
@@ -612,6 +665,151 @@ changelog:                                        # top-level, last (same shape 
 | `references` | | string[] (uri) | External reading. |
 | `changelog` | | array | Top-level (placed last); same shape as a detection's `changelog`. |
 
+## The macro object
+
+A macro is a named, reusable snippet of query logic. One document holds exactly one `language`; the
+KQL equivalent of an SPL macro is a separate document reusing the same `name`.
+
+```yaml
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/macro/v0.1.0.json
+id: 832ca4f6-6dc6-4043-9d90-f159169795e8
+name: security_content_ctime                      # the token referenced from `requires`
+title: Convert epoch time to a readable string
+description: Converts an epoch timestamp field to an ISO-8601-style string in place.
+
+metadata:
+  created_at: "2026-07-31"
+  version: "1.0.0"
+  authors: [Detection Engineering Team]
+
+language: spl                                     # spl | kql | cql
+arguments:                                        # omit entirely for a zero-arg macro
+  - name: field
+definition: 'convert timeformat="%Y-%m-%dT%H:%M:%S" ctime($field$)'
+```
+
+### Argument rules differ by language
+
+The three targets disagree about parameters, and the schema enforces the difference rather than
+papering over it:
+
+| `language` | `type` | `default` | Substitution token | Notes |
+|---|:---:|:---:|---|---|
+| `spl` | forbidden | forbidden | `$name$` | Splunk parameters are untyped and have no defaults. Arity is load-bearing: `[name(2)]` and `[name]` are different macros. |
+| `kql` | **required** | allowed | bare identifier | Sentinel declares a typed signature (`functionParameters: 'argSpan: timespan'`) and the function cannot be created without it. Defaults must be scalar literals and come after non-defaulted parameters. |
+| `cql` | forbidden | allowed | `?name` | LogScale parameters are untyped. Defaults map to `?{name=default}`, honoured in saved searches but ignored in the UI and dashboards. |
+
+A `default` must be a scalar — neither target can express a composite one. The "defaulted parameters
+last" rule cannot be stated in JSON Schema over an unbounded array, so `scripts/validate-macros.py`
+enforces it, along with unique argument names and the requirement that each declared argument
+actually appears at its substitution point in `definition`.
+
+`definition` carries logic only. The surrounding platform object's mechanics — Sentinel's
+`savedSearches` `category`, the LogScale repository or view, app or index placement — are the
+deployer's concern, for the same reason a schedule lives in `deployments[].config`.
+
+### Macro field reference
+
+| Field | Required | Type | Notes |
+|-------|:---:|------|-------|
+| `id` | ✓ | string (uuid) | Unique identifier for this document. Each language variant has its own. |
+| `name` | ✓ | string | The referenced token. `^[a-z][a-z0-9_]{2,63}$` — a safe intersection, since a Sentinel `functionAlias` must be a valid KQL identifier. |
+| `title` | ✓ | string (1–256) | Maps to Sentinel's `displayName`. |
+| `description` | | string | What it does and when to use it. |
+| `metadata` | ✓ | object | Same shape/rules as a detection's `metadata`. |
+| `language` | ✓ | enum | `spl`\|`kql`\|`cql`. Closed — no other supported platform has a macro primitive. |
+| `arguments` | | array | Ordered `{ name, type?, default? }`. Substitution is positional. |
+| `definition` | ✓ | string | The macro body. |
+| `references` | | string[] (uri) | External reading. |
+| `changelog` | | array | Placed last; same shape as a detection's `changelog`. |
+
+## The lookup object
+
+A lookup is a named reference dataset a detection matches against. It carries no `language`,
+`platform` or `deployments` — reference data is language-neutral.
+
+```yaml
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/lookup/v0.1.0.json
+id: 9f4c1a77-2b6e-4d08-8f31-c5a70e2d4b19
+name: attacker_tools                              # the token referenced from `requires`
+title: Known attacker tool names
+description: Executable names of tools routinely abused during intrusions.
+
+metadata:
+  created_at: "2026-07-31"
+  version: "1.0.0"
+  authors: [Detection Engineering Team]
+
+key: attacker_tool_names                          # the matched column; must be one of `columns`
+match:
+  type: exact                                     # exact | wildcard | regex | cidr (default exact)
+  case_sensitive: false
+
+columns:                                          # every column, in order
+  - name: attacker_tool_names
+    description: Executable name as it appears on disk.
+  - name: description
+    description: What the tool is used for, surfaced in the alert message.
+
+data:                                             # external file...
+  format: csv
+  file: attacker-tools.csv                        # relative to this document
+```
+
+`data` is one of two shapes, never both. Use an external file for anything substantial; use inline
+`rows` for a list short enough to stay reviewable in a single diff:
+
+```yaml
+data:
+  rows:
+    - { range: 203.0.113.0/24, site: london }
+    - { range: 198.51.100.0/24, site: new-york }
+```
+
+### Match-type portability
+
+`match.type` records author intent. It is **not** uniformly supported, and a deployer must reject
+what its target cannot do:
+
+| | `exact` | `wildcard` | `regex` | `cidr` |
+|---|:---:|:---:|:---:|:---:|
+| Splunk (csv lookup) | ✓ default | ✓ `WILDCARD()` | ✗ | ✓ `CIDR()` |
+| Sentinel (watchlist) | ✓ SearchKey | ✗ | ✗ | ✗ |
+| Google SecOps (reference list) | ✓ STRING | ✗ | ✓ REGEX | ✓ CIDR |
+| Elastic (value list) | ✓ | ✗ | ✗ | ✓ via `ip_range` |
+| CrowdStrike (lookup file) | ✓ default | ✓ `mode=glob` † | ✓ `mode=regex` | ✓ `mode=cidr` |
+| Cortex XSIAM (lookup dataset) | ✓ join | via XQL | via XQL | via XQL |
+
+† LogScale caps a glob-matched CSV at 20,000 rows.
+
+SentinelOne has no lookup primitive at all: STAR rules match single events, so a deployer targeting
+it must inline the values into the rule.
+
+### Scope of v0.1.0
+
+Lookups are **matching sets**. A lookup declares its columns and designates one as the matched
+`key`; what a deployer does with the remaining columns is deliberately unmodelled. Enrichment tables
+— Splunk kvstore, Google SecOps data tables, UDM entity-field mapping — are a later concern, as are
+machine-populated datasets with no authored rows. Size and ingestion limits belong to the deployer,
+since they differ by orders of magnitude between platforms (Sentinel caps a local watchlist upload
+at 3.8 MB; Elastic value lists default to ~9 MB).
+
+### Lookup field reference
+
+| Field | Required | Type | Notes |
+|-------|:---:|------|-------|
+| `id` | ✓ | string (uuid) | Unique lookup identifier. |
+| `name` | ✓ | string | The referenced token. `^[a-z][a-z0-9_]{2,63}$` — a Sentinel watchlist alias must be 3–64 characters, starting and ending alphanumeric. |
+| `title` | ✓ | string (1–256) | Human-readable title. |
+| `description` | | string | Contents, origin, and how it is maintained. |
+| `metadata` | ✓ | object | Same shape/rules as a detection's `metadata`. |
+| `key` | ✓ | string | The matched column. Must name one of `columns`. |
+| `match` | | object | `{ type?, case_sensitive? }`. Omit for exact, case-insensitive. |
+| `columns` | ✓ | array | `{ name, description? }`, in order. At least one. |
+| `data` | ✓ | object | Exactly one of `{ format, file }` or `{ rows }`. |
+| `references` | | string[] (uri) | External reading — the dataset's upstream source belongs here. |
+| `changelog` | | array | Placed last; same shape as a detection's `changelog`. |
+
 ## Validation
 
 ```bash
@@ -620,6 +818,19 @@ uvx check-jsonschema --schemafile schemas/udlf/v0.2.1.json examples/*.udlf.yaml
 
 # Strategy examples
 uvx check-jsonschema --schemafile schemas/udlf/strategy/v0.2.0.json examples/strategies/*.udlf.yaml
+
+# Macro and lookup examples
+uvx check-jsonschema --schemafile schemas/udlf/macro/v0.1.0.json examples/macros/*.udlf.yaml
+uvx check-jsonschema --schemafile schemas/udlf/lookup/v0.1.0.json examples/lookups/*.udlf.yaml
+```
+
+Macros and lookups each carry rules JSON Schema cannot express over a list of objects. It cannot
+check that a lookup's `key` names a declared column, that its sibling CSV exists with a matching
+header, or that a KQL macro's defaulted arguments come last. Those need a second pass:
+
+```bash
+./scripts/validate-macros.py examples/macros/*.udlf.yaml
+./scripts/validate-lookups.py examples/lookups/*.udlf.yaml
 ```
 
 The Sigma `$ref` is pinned to an immutable upstream tag
@@ -634,5 +845,8 @@ the network.
 - SPL — https://help.splunk.com/en/splunk-enterprise/search/search-manual
 - Splunk contentctl — https://github.com/splunk/contentctl
 - KQL — https://learn.microsoft.com/en-us/kusto/query/
+- Sentinel watchlists — https://learn.microsoft.com/en-us/azure/sentinel/watchlists
+- CQL / LogScale query functions — https://library.humio.com/data-analysis/syntax-function.html
+- Google SecOps reference lists — https://docs.cloud.google.com/chronicle/docs/yara-l/reference-list-syntax
 - Atomic Red Team — https://github.com/redcanaryco/atomic-red-team
 - NOVA — https://github.com/fr0gger/nova-framework
