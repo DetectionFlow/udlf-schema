@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://detectionflow.com/schemas/udlf/strategy/v0.2.0",
+  "$id": "https://detectionflow.com/schemas/udlf/strategy/v0.2.0.json",
   "title": "UDLF Strategy Schema v0.2.0",
   "description": "Universal Detection Lifecycle Format (UDLF) strategy schema. A strategy is an analytic-story-style grouping that references multiple detections by id and carries a narrative describing the threat it addresses (e.g. \"Scattered Spider Coverage\", \"Entra ID\").",
   "type": "object",

@@ -4,7 +4,7 @@
 This repository contains the JSON Schema and specification for UDLF (Universal Detection Lifecycle Format) - a vendor-neutral format for security detection rules that works across SIEM platforms.
 
 ## Key Files
-- `schemas/udlf/v0.2.0.json` - Detection JSON Schema for validation (uses JSON Schema Draft 2020-12)
+- `schemas/udlf/v0.2.1.json` - Detection JSON Schema for validation (uses JSON Schema Draft 2020-12)
 - `schemas/udlf/strategy/v0.2.0.json` - Strategy JSON Schema (analytic-story grouping of detections)
 - `schemas/udlf/config/<platform>/v<version>.json` - Optional, opt-in sub-schemas for `deployments[].config`.
   Not `$ref`'d from the core schema; applied as a separate pass via `scripts/validate-config.py`
@@ -15,15 +15,16 @@ This repository contains the JSON Schema and specification for UDLF (Universal D
 ## Important Conventions
 - Detection files use `.udlf.yaml` extension; strategy files live under `examples/strategies/`
 - The Sigma `$ref` points at an immutable upstream tag (SigmaHQ/sigma-specification `v2.1.0`), not `main`
-- Schema ID follows pattern: `https://detectionflow.com/schemas/udlf/v{version}` (strategy under `.../udlf/strategy/v{version}`, config sub-schemas under `.../udlf/config/{platform}/v{version}`)
-- **Every schema's repo path mirrors its `$id` path** (`schemas/udlf/v0.2.0.json` ⇄ `/schemas/udlf/v0.2.0`), so `schemas/` is served directly at the published URLs. Keep them in lockstep — a new version means a new file, not an edit to the old one, so superseded versions stay resolvable.
+- Schema ID follows pattern: `https://detectionflow.com/schemas/udlf/v{version}.json` (strategy under `.../udlf/strategy/v{version}.json`, config sub-schemas under `.../udlf/config/{platform}/v{version}.json`). The `.json` suffix is deliberate — the web host serving detectionflow.com appends it to extensionless paths, so a bare `$id` does not resolve.
+- **Every schema's repo path mirrors its `$id` path** (`schemas/udlf/v0.2.1.json` ⇄ `/schemas/udlf/v0.2.1.json`), so `schemas/` is served directly at the published URLs. Keep them in lockstep — a new version means a new file, not an edit to the old one, so superseded versions stay resolvable.
 - Examples should include the yaml-language-server header for VS Code validation
 
 ## Common Tasks
 
 ### Modifying the Schema
-- Edit `schemas/udlf/v0.2.0.json` for structural changes (v0.2.0 is unreleased, so it is still
-  edited in place; once published, a change means copying to a new `v{next}.json` and updating `$id`)
+- `schemas/udlf/v0.2.1.json` is the current detection schema; `v0.2.0.json` is frozen and stays
+  served. A structural change means copying to a new `v{next}.json`, updating `$id`/`title`, and
+  repointing the examples + docs — not editing a published version in place.
 - Update `udlf-specification.md` to reflect schema changes
 - Test changes against example files in `examples/`
 - Once changes have been completed and validated, ask if the schema version should be updated
@@ -35,7 +36,7 @@ This repository contains the JSON Schema and specification for UDLF (Universal D
 
 ### Validation
 Validate examples with `check-jsonschema` (resolves the remote Sigma `$ref`):
-- `uvx check-jsonschema --schemafile schemas/udlf/v0.2.0.json examples/*.udlf.yaml`
+- `uvx check-jsonschema --schemafile schemas/udlf/v0.2.1.json examples/*.udlf.yaml`
 - `uvx check-jsonschema --schemafile schemas/udlf/strategy/v0.2.0.json examples/strategies/*.udlf.yaml`
 
 `deployments[].config` is free-form to the core schema, so it needs a second, opt-in pass that
@@ -44,8 +45,11 @@ dispatches on the sibling `platform` (check-jsonschema cannot do this):
 
 ## Schema Structure (v0.2)
 - **No top-level `format`.** A detection carries `detection_content` as an **array** of logic
-  variants, each `{ language, logic }`. `language` is the discriminator; `sigma` is a language
-  whose `logic` is an embedded native Sigma object validated against the pinned SigmaHQ schema.
+  variants, each `{ language, description?, logic }`. `language` is the discriminator; `sigma` is a
+  language whose `logic` is an embedded native Sigma object validated against the pinned SigmaHQ
+  schema. Variants may share a `language` (tstats vs raw-log SPL, per-client tuning); the optional
+  `description` is a short human label for telling them apart — documentation only, never a
+  deploy-time selector.
 - **Two independent axes:** `lifecycle` (research → development → testing → live → decommissioned)
   is maturity; a deployment's `mode` (alert | warranty | monitoring | disabled) is runtime behavior.
 - **`deployments`** is an array of `{ name?, platform, mode, lifecycle?, config? }`. `platform`
@@ -86,7 +90,7 @@ dispatches on the sibling `platform` (check-jsonschema cannot do this):
   Correlation.
 - **Config sub-schemas are opt-in and closed.** They are never `$ref`'d from the core schema, so
   core validation is unchanged and an unmodelled platform is skipped rather than rejected. Each
-  versions independently on its own semver line — `v0.1.0` while core is `v0.2.0` — and
+  versions independently on its own semver line — `v0.1.0` while core is `v0.2.1` — and
   `config.schema: "splunk-es::0.1.0"` pins an exact revision (pre-1.0 promises no compatibility
   within a major, so the pin is exact, not compatible-within-major). Every shape offers an
   `advanced` map for raw vendor keys (savedsearches.conf keys, for the Splunk shapes) except

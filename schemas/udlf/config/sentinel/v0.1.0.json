@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://detectionflow.com/schemas/udlf/config/sentinel/v0.1.0",
+  "$id": "https://detectionflow.com/schemas/udlf/config/sentinel/v0.1.0.json",
   "title": "UDLF deployment config — Microsoft Sentinel",
   "description": "Optional, opt-in sub-schema for the `config` block of a UDLF deployment whose `platform` is `sentinel`. Covers Microsoft Sentinel analytics rules: schedule, trigger, alert presentation, incident grouping and entity mappings. The KQL query is not here — it lives in `detection_content` like any other language variant. Neither are the fields UDLF already owns: maturity and runtime behaviour come from `lifecycle` and `mode`, authorship from `metadata.authors`, and each target workspace is its own deployment entry rather than a tenant list. Vendor-assigned rule ids are absent too, because UDLF is desired-state only — reconciling against what is actually deployed is the deployer's job. ATT&CK techniques come from the top-level `threat` block, but `alert.tactics` is modelled here because Sentinel spells its tactics its own way (`CommandAndControl`). Every field notes the Sentinel API property it maps to. This schema is NOT referenced by the UDLF core schema; apply it separately when you want the block validated.",
   "type": "object",

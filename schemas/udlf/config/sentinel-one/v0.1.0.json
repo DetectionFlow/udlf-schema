@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://detectionflow.com/schemas/udlf/config/sentinel-one/v0.1.0",
+  "$id": "https://detectionflow.com/schemas/udlf/config/sentinel-one/v0.1.0.json",
   "title": "UDLF deployment config — SentinelOne STAR Rules",
   "description": "Optional, opt-in sub-schema for the `config` block of a UDLF deployment whose `platform` is `sentinel-one`. Covers SentinelOne STAR rules. This is not a scheduled-search platform: STAR rules evaluate continuously, so there is no schedule block, and a rule may carry active-response actions that quarantine an endpoint. The fields UDLF already owns are absent — maturity and runtime behaviour come from `lifecycle` and `mode`, authorship from `metadata.authors`, and each target tenant is its own deployment entry — as are vendor-assigned rule ids, because UDLF is desired-state only. For a `Single Event` rule the S1QL query lives in `detection_content` like any other language. For a `Correlation` rule the subqueries stay here, because they are structural parts of the rule definition rather than one logic blob — the one place logic legitimately leaks into `config`, pending the correlation-primitive decision in the v0.3.0 roadmap. This schema is NOT referenced by the UDLF core schema; apply it separately when you want the block validated.",
   "type": "object",
