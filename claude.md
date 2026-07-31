@@ -49,13 +49,13 @@ dispatches on the sibling `platform` (check-jsonschema cannot do this):
 - **Two independent axes:** `lifecycle` (research → development → testing → live → decommissioned)
   is maturity; a deployment's `mode` (alert | warranty | monitoring | disabled) is runtime behavior.
 - **`deployments`** is an array of `{ name?, platform, mode, lifecycle?, config? }`. `platform`
-  (splunk|splunk-es|splunk-contentctl|elastic|sentinel, extensible) is the discriminator — selects
+  (splunk|splunk-es|splunk-contentctl-v5-6|elastic|sentinel, extensible) is the discriminator — selects
   the logic variant and scopes the meaning of `config`; `name` (listed first) is a friendly endpoint
   resolved to infra/secrets by the deployer. Everything platform-specific (schedule, suppression,
   notable, rba, vendor round-trip fields) lives inside the free-form `config` object. `mode` governs
   notable vs risk-only; there is no separate `actions` list. Deploy-neutral **policy** only, never
   secrets/mechanics. Per-deployment `lifecycle` inherits the top-level when omitted.
-- **Seven config sub-schemas ship today**: splunk, splunk-es, splunk-contentctl, sentinel,
+- **Seven config sub-schemas ship today**: splunk, splunk-es, splunk-contentctl-v5-6, sentinel,
   defender-for-endpoint, crowdstrike, sentinel-one. `elastic` is unmodelled, so its config passes
   through unvalidated. Every shape leaves out what UDLF owns elsewhere: the query (it belongs in
   `detection_content`), lifecycle/mode, authorship, the target endpoint set, and vendor-assigned
@@ -69,15 +69,18 @@ dispatches on the sibling `platform` (check-jsonschema cannot do this):
   know the platform spelling. The **deployer** translates and collapses: Splunk ES takes the five
   values verbatim, CrowdStrike title-cases, Splunk maps to the numeric `alert.severity`, Sentinel
   and MDE have no `Critical`, SentinelOne has no `Informational`. Sole exception:
-  `splunk-contentctl` has no override, because contentctl's `Deployment.alert_action.notable`
+  `splunk-contentctl-v5-6` has no override, because contentctl's `Deployment.alert_action.notable`
   carries only rule_title/rule_description/nes_fields and cannot author a per-detection severity.
 - **Not every platform is a scheduled search.** MDE couples frequency to lookback via a fixed enum;
   CrowdStrike schedules with a start/end window; SentinelOne has no schedule at all. MDE `actions`
   and SentinelOne `response` can isolate/quarantine/disable — `mode` describes detection behaviour
   only, so those blocks carry blast radius `mode` does not convey.
 - **`platform` can name a toolchain, not just a product**, where that changes the shape of `config`.
-  `splunk` and `splunk-es` are built and uploaded as an app by the deployer; `splunk-contentctl`
-  hands a contentctl-shaped detection to the contentctl pipeline. The contentctl config is *not* a
+  `splunk` and `splunk-es` are built and uploaded as an app by the deployer; `splunk-contentctl-v5-6`
+  hands a contentctl-shaped detection to the contentctl pipeline. The platform name carries the
+  **tool** version where that tool's format is unstable across majors — `-v5-6` targets contentctl
+  v5.6; a v6.3 path would be a sibling value (`splunk-contentctl-v6-3`), not a redefinition, and
+  the trailing `::0.1.0` pin versions UDLF's mapping, not contentctl. The contentctl config is *not* a
   superset of splunk-es — its `type` (TTP|Anomaly|Hunting|Correlation) supplies the schedule via
   ESCU deployment matching, so it has no `schedule` block, and `rba` is forbidden on Hunting and
   Correlation.
@@ -85,9 +88,9 @@ dispatches on the sibling `platform` (check-jsonschema cannot do this):
   core validation is unchanged and an unmodelled platform is skipped rather than rejected. Each
   versions independently on its own semver line — `v0.1.0` while core is `v0.2.0` — and
   `config.schema: "splunk-es::0.1.0"` pins an exact revision (pre-1.0 promises no compatibility
-  within a major, so the pin is exact, not compatible-within-major). `splunk`/`splunk-es`
-  offer an `advanced` map for raw savedsearches.conf keys; `splunk-contentctl` does not, because
-  contentctl forbids extra keys itself. Each mirrors what *its own* deployer enforces, so they
+  within a major, so the pin is exact, not compatible-within-major). Every shape offers an
+  `advanced` map for raw vendor keys (savedsearches.conf keys, for the Splunk shapes) except
+  `splunk-contentctl-v5-6`, which does not, because contentctl forbids extra keys itself. Each mirrors what *its own* deployer enforces, so they
   legitimately differ (e.g. suppression-window units). Exception: `splunk-es` threat-object types
   accept the **union** of the Splunk RBA community list and contentctl's, because ES constrains the
   value not at all and contentctl writes its own spelling verbatim into savedsearches.conf — so a
