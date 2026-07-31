@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://detectionflow.com/schemas/udlf/config/crowdstrike/v0.1.0",
+  "$id": "https://detectionflow.com/schemas/udlf/config/crowdstrike/v0.1.0.json",
   "title": "UDLF deployment config — CrowdStrike Falcon Correlation Rules",
   "description": "Optional, opt-in sub-schema for the `config` block of a UDLF deployment whose `platform` is `crowdstrike`. Covers Falcon correlation rules: rule presentation, classification, outcome and the start/end schedule window. The query is not here — it lives in `detection_content` like any other language variant. Neither are the fields UDLF already owns: maturity and runtime behaviour come from `lifecycle` and `mode`, authorship from `metadata.authors`, and each target tenant is its own deployment entry. Vendor-assigned rule ids are absent too, because UDLF is desired-state only — reconciling against what is actually deployed is the deployer's job. Unlike the Sentinel and Defender sub-schemas, the ATT&CK mapping is modelled here rather than left to the top-level `threat` block: Falcon's tactic and technique vocabularies mix real ATT&CK ids with proprietary `CST*` values (\"AI Powered IOA\", \"Falcon OverWatch\", \"Machine Learning\") that `threat` cannot express. This schema is NOT referenced by the UDLF core schema; apply it separately when you want the block validated.",
   "type": "object",

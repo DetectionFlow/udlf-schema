@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.2.0
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.2.1.json
 #
 # Showcase: one threat-idea, two logic variants (SPL + KQL), two deployments on
 # different platforms — each at its own lifecycle stage and runtime mode.
@@ -59,6 +59,7 @@ threat:
 # Two hand-authored variants. A deployer selects the variant matching each target.
 detection_content:
   - language: spl
+    description: Raw log SPL version
     logic: |
       index=endpoint source=XmlWinEventLog:Microsoft-Windows-Sysmon/Operational EventCode=10
       GrantedAccess IN ("0x1F0FFF","0x1F1FFF","0x143A")
@@ -66,6 +67,7 @@ detection_content:
       | join dest [ search index=endpoint EventCode=7034 | stats min(_time) as stop_time by dest ]
       | where stop_time > inject_time
   - language: kql
+    description: Microsoft Defender XDR advanced hunting equivalent
     logic: |
       DeviceEvents
       | where ActionType in ("CreateRemoteThread", "ProcessAccess")

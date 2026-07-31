@@ -24,7 +24,7 @@ UDLF provides a vendor-neutral format for representing security detection rules,
 
 | File | Description |
 |------|-------------|
-| `schemas/udlf/v0.2.0.json` | JSON Schema for UDLF detections |
+| `schemas/udlf/v0.2.1.json` | JSON Schema for UDLF detections |
 | `schemas/udlf/strategy/v0.2.0.json` | JSON Schema for UDLF strategies (grouping of detections) |
 | `schemas/udlf/config/<platform>/v0.1.0.json` | Optional, opt-in sub-schemas for a deployment's `config` block (splunk, splunk-es, splunk-contentctl-v5-6, sentinel, defender-for-endpoint, crowdstrike, sentinel-one) |
 | `udlf-specification.md` | Full specification document |
@@ -37,7 +37,8 @@ directly at the published URLs and superseded versions stay resolvable alongside
 ```
 ├── schemas/                          # Served at the published $id URLs
 │   └── udlf/
-│       ├── v0.2.0.json               # Detection JSON Schema
+│       ├── v0.2.1.json               # Detection JSON Schema (current)
+│       ├── v0.2.0.json               # Detection JSON Schema (superseded, still served)
 │       ├── strategy/
 │       │   └── v0.2.0.json           # Strategy JSON Schema
 │       └── config/                   # Opt-in per-platform deployment config sub-schemas
@@ -71,10 +72,10 @@ Add the matching header to your files:
 
 ```yaml
 # detections (.udlf.yaml)
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.2.0
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.2.1.json
 
 # strategies (examples/strategies/*.udlf.yaml)
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/strategy/v0.2.0
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/strategy/v0.2.0.json
 ```
 
 ### Programmatic Validation
@@ -82,7 +83,7 @@ Add the matching header to your files:
 Use `check-jsonschema`, which resolves the remote Sigma `$ref` used by `language: sigma` variants:
 
 ```bash
-uvx check-jsonschema --schemafile schemas/udlf/v0.2.0.json examples/*.udlf.yaml
+uvx check-jsonschema --schemafile schemas/udlf/v0.2.1.json examples/*.udlf.yaml
 uvx check-jsonschema --schemafile schemas/udlf/strategy/v0.2.0.json examples/strategies/*.udlf.yaml
 ```
 

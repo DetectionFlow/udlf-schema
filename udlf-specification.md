@@ -5,13 +5,13 @@ across multiple SIEM platforms. It is a **deploy-neutral source of truth**: a UD
 carries a detection's logic, threat context, tests, relationships and deployment *policy* —
 but never deployment *mechanics or secrets*.
 
-- **Schema (detection):** `schemas/udlf/v0.2.0.json` — `$id: https://detectionflow.com/schemas/udlf/v0.2.0`
-- **Schema (strategy):** `schemas/udlf/strategy/v0.2.0.json` — `$id: https://detectionflow.com/schemas/udlf/strategy/v0.2.0`
+- **Schema (detection):** `schemas/udlf/v0.2.1.json` — `$id: https://detectionflow.com/schemas/udlf/v0.2.1.json`
+- **Schema (strategy):** `schemas/udlf/strategy/v0.2.0.json` — `$id: https://detectionflow.com/schemas/udlf/strategy/v0.2.0.json`
 - **Draft:** JSON Schema 2020-12
 - **File extension:** `.udlf.yaml`
 
-Every schema's repo path mirrors its `$id` path, so `schemas/` can be served directly at the
-published URLs and old versions stay resolvable alongside new ones.
+Every schema's repo path mirrors its `$id` path — `.json` extension included — so `schemas/` can be
+served directly at the published URLs and old versions stay resolvable alongside new ones.
 
 ## Problem statement
 
@@ -95,6 +95,12 @@ Threat hunting is **not** a mode. It appears three ways, depending on how the hu
 `detection_content` is an array. Each entry pairs a `language` with its `logic`. This is where
 "each in its own language" lives — a detection can hold hand-authored SPL and KQL side by side.
 
+Several entries may share a `language`: a `tstats`-accelerated SPL next to a raw-log SPL, or one
+variant tuned per client. Add an optional `description` to say which is which — a short label like
+`Raw log SPL version` or `Tuned for client X`. It is documentation for whoever reads or maintains
+the file, not a selector: `platform` still picks the *language*, so where two same-language variants
+exist the deployer needs out-of-band knowledge of which one that endpoint should get.
+
 `language: sigma` is special: instead of a raw query string, `logic` holds an **embedded native
 Sigma rule object**, validated against the pinned upstream SigmaHQ schema. This lets you wrap an
 existing Sigma rule in UDLF to gain lifecycle, deployment and test management while keeping the
@@ -103,7 +109,7 @@ original rule intact and schema-validated. Trace it back to its origin with a `d
 ## The detection object
 
 ```yaml
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.2.0
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.2.1.json
 id: a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d          # UUID v4
 title: Process Injection with Defensive Tooling Tampering
 lifecycle: testing                                # overall stage + pre-deployment default
@@ -145,9 +151,11 @@ threat:
 
 detection_content:                                # array of language+logic variants
   - language: spl
+    description: Raw log SPL version                # optional label; only documentation
     logic: |
       index=endpoint EventCode=10 GrantedAccess IN ("0x1F0FFF") | ...
   - language: kql
+    description: Tuned for client X
     logic: |
       DeviceEvents | where ActionType == "CreateRemoteThread" | ...
 
@@ -212,8 +220,9 @@ changelog:                                        # top-level, last: append-only
 | `metadata.created_at` | ✓ | string (date) | `YYYY-MM-DD`. |
 | `metadata.version` | ✓ | string | Semver `^\d+\.\d+\.\d+$`. |
 | `metadata.authors` | | string[] | Replaces v0.1 `created_by`. |
-| `detection_content` | | array | Logic variants; each `{ language, logic }`. |
+| `detection_content` | | array | Logic variants; each `{ language, description?, logic }`. |
 | `detection_content[].language` | ✓* | enum | `spl`\|`kql`\|`sigma`\|`yara`\|`yara-l`\|`python`\|`sql`. |
+| `detection_content[].description` | | string (1–256) | Short label distinguishing variants that share a language. Documentation only; not a deploy-time selector. |
 | `detection_content[].logic` | ✓* | string \| object | String query, **or** an embedded Sigma object when `language: sigma`. |
 | `detection_context` | | object | Human context (see below). |
 | `detection_context.severity` | | enum | `critical`\|`high`\|`medium`\|`low`\|`informational`. |
@@ -472,7 +481,7 @@ exist, and a platform with no sub-schema is simply unvalidated rather than rejec
 escape hatch working as intended.
 
 Each carries its own semver line, versioned independently of UDLF core — hence `v0.1.0` while the
-core schema is at `v0.2.0`. A block may declare which revision it was authored against:
+core schema is at `v0.2.1`. A block may declare which revision it was authored against:
 
 ```yaml
 config:
@@ -553,7 +562,7 @@ A strategy is an analytic-story-style grouping that references detections by id 
 threat it addresses.
 
 ```yaml
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/strategy/v0.2.0
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/strategy/v0.2.0.json
 id: c0ffee00-1234-4abc-9def-000000000001
 title: Defense Evasion via Security Tooling Tampering
 
@@ -607,7 +616,7 @@ changelog:                                        # top-level, last (same shape 
 
 ```bash
 # Detection examples
-uvx check-jsonschema --schemafile schemas/udlf/v0.2.0.json examples/*.udlf.yaml
+uvx check-jsonschema --schemafile schemas/udlf/v0.2.1.json examples/*.udlf.yaml
 
 # Strategy examples
 uvx check-jsonschema --schemafile schemas/udlf/strategy/v0.2.0.json examples/strategies/*.udlf.yaml

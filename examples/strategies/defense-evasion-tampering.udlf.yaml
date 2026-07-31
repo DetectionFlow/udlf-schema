@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/strategy/v0.2.0
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/strategy/v0.2.0.json
 #
 # A strategy groups related detections under an analytic-story narrative.
 # Members are detection references only (by id).

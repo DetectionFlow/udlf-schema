@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://detectionflow.com/schemas/udlf/config/splunk/v0.1.0",
+  "$id": "https://detectionflow.com/schemas/udlf/config/splunk/v0.1.0.json",
   "title": "UDLF deployment config — Splunk Enterprise",
   "description": "Optional, opt-in sub-schema for the `config` block of a UDLF deployment whose `platform` is `splunk`. Covers Splunk Enterprise where the deployer builds a custom app and uploads it, producing savedsearches.conf stanzas. No Enterprise Security features are assumed — no notable events, no risk-based alerting. This schema is NOT referenced by the UDLF core schema; the core schema leaves `config` free-form. Apply this file separately when you want the block validated. Deployment mechanics and secrets (base_url, token, app name, owner) are deliberately absent — they are resolved from the deployment's named endpoint by the deployer, never carried in content.",
   "type": "object",
