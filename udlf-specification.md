@@ -294,7 +294,7 @@ changelog:                                        # top-level, last: append-only
 | `tests` | | array | Validation tests; see below. |
 | `links` | | array | Typed relationships; see below. |
 | `deployments` | | array | Where/how it runs; see below. |
-| `changelog` | | array | Top-level (placed last); each `{ date, version, author, summary }`. Latest `date` = effective last-updated. Replaces `updated_at`. |
+| `changelog` | | array | Top-level (placed last); each `{ date, version, author, summary }`. Latest `date` = effective last-updated. Replaces `updated_at`. The newest entry's `version` should equal `metadata.version`: the changelog records how the detection reached the version it currently claims, so a new entry means bumping both. |
 
 \* Required only within its parent object when that object is present.
 
