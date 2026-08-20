@@ -645,13 +645,16 @@ differ. Three worth knowing about, all of which the schemas will catch:
   block carrying risk objects must supply a message one way or the other. As with threat-object
   spellings, never rewrite between the shapes on import — what ES returns is what the detection
   actually deploys.
-- **Where ES enforces nothing, `splunk-es` enforces nothing.** `risk_object_type` is free text on
-  the risk event, so it is an open string rather than an enum: a live instance contains `N/A` for an
-  entity with no applicable category, and occasionally a field name that someone put in the type
-  slot. Both are recorded rather than rejected. An `rba` block carrying only a message is legal for
-  the same reason — that is what ES returns when the risk action is enabled and `_risk` is empty.
-  `threat_object_type` stays enumerated, because there the enum is a union of two *documented*
-  vocabularies and earns its keep as authoring help.
+- **`risk_object_type` and the `N/A` that ES adds.** Both contentctl versions lock this to
+  `system`, `user` and `other`, so those are the only three that can be *authored*. ES constrains
+  the field not at all, and writes `N/A` itself for an entity with no applicable category — so an
+  export of content that never contained `N/A` comes back carrying it — as a whole sentinel row,
+  `{"risk_object_field": "N/A", "risk_object_type": "N/A", "risk_score": 0}`, meaning the notable has
+  no single attributed entity and the real ones are in `_risk`. `splunk-es` therefore takes all four
+  and stops there: a value outside them is a defect in the source rule, not a shape worth
+  learning, and failing on it is how it gets noticed. An `rba` block carrying only a message is a
+  different case and *is* accepted — that is what ES returns when the risk action is enabled and
+  `_risk` is empty, so demanding a risk or threat object would reject a real state.
 
 Note also that `score` sits on each **risk object**, not on the `rba` block — Splunk ES scores each
 entity independently, and both contentctl and the ES conf keys reflect that.
