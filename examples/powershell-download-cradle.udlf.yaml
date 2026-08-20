@@ -75,9 +75,9 @@ deployments:
     mode: alert
     lifecycle: live
     # Free-form to the UDLF core schema. Optionally checked against
-    # schemas/udlf/config/splunk-es/v0.1.0.json as a separate, explicit pass.
+    # schemas/udlf/config/splunk-es/v0.2.0.json as a separate, explicit pass.
     config:
-      schema: splunk-es::0.1.0         # which config revision this was authored against
+      schema: splunk-es::0.2.0         # which config revision this was authored against
       schedule:
         cron: "0 * * * *"            # cron goes in `cron`; `frequency` is for "15m"-style sugar
         lookback: "-70m@m"

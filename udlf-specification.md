@@ -557,7 +557,7 @@ explicit pass when you want the block checked:
 | `platform` | Sub-schema |
 |---|---|
 | `splunk` | `schemas/udlf/config/splunk/v0.1.0.json` |
-| `splunk-es` | `schemas/udlf/config/splunk-es/v0.1.0.json` |
+| `splunk-es` | `schemas/udlf/config/splunk-es/v0.2.0.json` |
 | `splunk-contentctl-v5-6` | `schemas/udlf/config/splunk-contentctl-v5-6/v0.1.0.json` |
 | `splunk-contentctl-ng` | `schemas/udlf/config/splunk-contentctl-ng/v0.1.0.json` |
 | `sentinel` | `schemas/udlf/config/sentinel/v0.1.0.json` |
@@ -571,17 +571,17 @@ They are **not** `$ref`'d from the core schema. Core validation is unchanged whe
 exist, and a platform with no sub-schema is simply unvalidated rather than rejected — that is the
 escape hatch working as intended.
 
-Each carries its own semver line, versioned independently of UDLF core — hence `v0.1.0` while the
-core schema is at `v0.2.2`. A block may declare which revision it was authored against:
+Each carries its own semver line, versioned independently of UDLF core — hence sub-schemas at
+`v0.1.0` and `v0.2.0` while the core schema is at `v0.2.2`. A block may declare which revision it was authored against:
 
 ```yaml
 config:
-  schema: splunk-es::0.1.0   # optional; pins the exact sub-schema revision
+  schema: splunk-es::0.2.0   # optional; pins the exact sub-schema revision
 ```
 
 The pin is exact rather than compatible-within-major: pre-1.0 semver makes no compatibility
 promise, so a block pinned to `0.1.0` keeps validating against `0.1.0` after a later revision
-ships. Omit `schema` to validate against the highest revision available.
+ships. `splunk-es` is the first to have two, and both stay served. Omit `schema` to validate against the highest revision available.
 
 Where a platform name carries a **tool** version, the two numbers are unrelated axes and
 `splunk-contentctl-v5-6::0.1.0` reads as both at once: the platform fixes the target format
@@ -618,7 +618,7 @@ than a single logic blob, and no `detection_content` variant can currently expre
 multi-query correlation — see the correlation decision in the v0.3.0 roadmap.
 
 Each sub-schema mirrors what *its own* deployer actually enforces, so they differ where the tools
-differ. Two examples worth knowing about, both of which the schemas will catch:
+differ. Three worth knowing about, all of which the schemas will catch:
 
 - **Threat-object types.** Two vocabularies are in circulation for the same concept: the
   [Splunk RBA community list](https://splunk.github.io/rba/searches/threat_object_types/)
@@ -635,6 +635,16 @@ differ. Two examples worth knowing about, both of which the schemas will catch:
 - **Suppression windows.** Splunk accepts days; contentctl v5.6 accepts seconds, minutes and hours
   only, so one day must be written `86400s`, `1440m` or `24h`. contentctl-ng accepts no suppression
   at all — ESCU 6.x dropped `throttling` without a successor.
+- **Where the risk message lives.** ES carries two shapes of risk annotation at once. In one, a
+  single message describes the whole detection and lands in `action.risk.param._risk_message`; in
+  the ES8 findings shape each risk object carries its own, serialised per entry into
+  `action.risk.param._risk[*].risk_message`, and the alert subject moves into
+  `action.notable.param._entities`. contentctl-ng emits only the second. Because `splunk-es` records
+  what an instance returns rather than what one build tool accepts, it takes **both**: `rba.message`
+  is optional, `rba.risk_objects[].risk_message` and `notable.entities` sit alongside it, and a
+  block carrying risk objects must supply a message one way or the other. As with threat-object
+  spellings, never rewrite between the shapes on import — what ES returns is what the detection
+  actually deploys.
 
 Note also that `score` sits on each **risk object**, not on the `rba` block — Splunk ES scores each
 entity independently, and both contentctl and the ES conf keys reflect that.

@@ -99,7 +99,7 @@ dispatches on the sibling `platform` (check-jsonschema cannot do this):
 - **Config sub-schemas are opt-in and closed.** They are never `$ref`'d from the core schema, so
   core validation is unchanged and an unmodelled platform is skipped rather than rejected. Each
   versions independently on its own semver line — `v0.1.0` while core is `v0.2.2` — and
-  `config.schema: "splunk-es::0.1.0"` pins an exact revision (pre-1.0 promises no compatibility
+  `config.schema: "splunk-es::0.2.0"` pins an exact revision (pre-1.0 promises no compatibility
   within a major, so the pin is exact, not compatible-within-major). Every shape offers an
   `advanced` map for raw vendor keys (savedsearches.conf keys, for the Splunk shapes) except the two
   contentctl shapes, which do not, because contentctl forbids extra keys itself. Each mirrors what
