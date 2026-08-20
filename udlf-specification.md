@@ -650,8 +650,9 @@ differ. Three worth knowing about, all of which the schemas will catch:
   the field not at all, and writes `N/A` itself for an entity with no applicable category — so an
   export of content that never contained `N/A` comes back carrying it — as a whole sentinel row,
   `{"risk_object_field": "N/A", "risk_object_type": "N/A", "risk_score": 0}`, meaning the notable has
-  no single attributed entity and the real ones are in `_risk`. `splunk-es` therefore takes all four
-  and stops there: a value outside them is a defect in the source rule, not a shape worth
+  no single attributed entity and the real ones are in `_risk`. `notable.entities` therefore takes
+  all four and stops there — `rba.risk_objects` keeps only the three, since a list with nothing to
+  score is simply empty and needs no placeholder: a value outside them is a defect in the source rule, not a shape worth
   learning, and failing on it is how it gets noticed. An `rba` block carrying only a message is a
   different case and *is* accepted — that is what ES returns when the risk action is enabled and
   `_risk` is empty, so demanding a risk or threat object would reject a real state.
