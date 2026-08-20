@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.2.1.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.2.2.json
 id: 550e8400-e29b-41d4-a716-446655440000
 title: Detect PowerShell Download Cradle
 lifecycle: live

@@ -24,11 +24,11 @@ UDLF provides a vendor-neutral format for representing security detection rules,
 
 | File | Description |
 |------|-------------|
-| `schemas/udlf/v0.2.1.json` | JSON Schema for UDLF detections |
+| `schemas/udlf/v0.2.2.json` | JSON Schema for UDLF detections |
 | `schemas/udlf/strategy/v0.2.0.json` | JSON Schema for UDLF strategies (grouping of detections) |
 | `schemas/udlf/macro/v0.1.0.json` | JSON Schema for UDLF macros (reusable query snippets referenced by a detection's `requires`) |
 | `schemas/udlf/lookup/v0.1.0.json` | JSON Schema for UDLF lookups (reference datasets referenced by a detection's `requires`) |
-| `schemas/udlf/config/<platform>/v0.1.0.json` | Optional, opt-in sub-schemas for a deployment's `config` block (splunk, splunk-es, splunk-contentctl-v5-6, sentinel, defender-for-endpoint, crowdstrike, sentinel-one) |
+| `schemas/udlf/config/<platform>/v0.1.0.json` | Optional, opt-in sub-schemas for a deployment's `config` block (splunk, splunk-es, splunk-contentctl-v5-6, splunk-contentctl-ng, sentinel, defender-for-endpoint, crowdstrike, sentinel-one) |
 | `udlf-specification.md` | Full specification document |
 
 Each schema's path under `schemas/` mirrors its `$id` path, so the directory can be served
@@ -39,7 +39,8 @@ directly at the published URLs and superseded versions stay resolvable alongside
 ```
 ├── schemas/                          # Served at the published $id URLs
 │   └── udlf/
-│       ├── v0.2.1.json               # Detection JSON Schema (current)
+│       ├── v0.2.2.json               # Detection JSON Schema (current)
+│       ├── v0.2.1.json               # Detection JSON Schema (superseded, still served)
 │       ├── v0.2.0.json               # Detection JSON Schema (superseded, still served)
 │       ├── strategy/
 │       │   └── v0.2.0.json           # Strategy JSON Schema
@@ -47,6 +48,7 @@ directly at the published URLs and superseded versions stay resolvable alongside
 │           ├── splunk/v0.1.0.json
 │           ├── splunk-es/v0.1.0.json
 │           ├── splunk-contentctl-v5-6/v0.1.0.json
+│           ├── splunk-contentctl-ng/v0.1.0.json
 │           ├── sentinel/v0.1.0.json
 │           ├── defender-for-endpoint/v0.1.0.json
 │           ├── crowdstrike/v0.1.0.json
@@ -57,7 +59,7 @@ directly at the published URLs and superseded versions stay resolvable alongside
 ├── examples/                         # Example detection files
 │   ├── powershell-download-cradle.udlf.yaml          # single SPL variant
 │   ├── sigma-linked.udlf.yaml                        # embedded, validated Sigma rule
-│   ├── process-injection-multi-deployment.udlf.yaml  # SPL + KQL, two deployments
+│   ├── process-injection-multi-deployment.udlf.yaml  # SPL + KQL, four deployments
 │   └── strategies/                   # Example strategy files
 │       └── defense-evasion-tampering.udlf.yaml       # strategy grouping
 └── references/                       # Vendored external schemas (Sigma, etc.)
@@ -74,7 +76,7 @@ Add the matching header to your files:
 
 ```yaml
 # detections (.udlf.yaml)
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.2.1.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.2.2.json
 
 # strategies (examples/strategies/*.udlf.yaml)
 # yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/strategy/v0.2.0.json
@@ -91,7 +93,7 @@ Add the matching header to your files:
 Use `check-jsonschema`, which resolves the remote Sigma `$ref` used by `language: sigma` variants:
 
 ```bash
-uvx check-jsonschema --schemafile schemas/udlf/v0.2.1.json examples/*.udlf.yaml
+uvx check-jsonschema --schemafile schemas/udlf/v0.2.2.json examples/*.udlf.yaml
 uvx check-jsonschema --schemafile schemas/udlf/strategy/v0.2.0.json examples/strategies/*.udlf.yaml
 uvx check-jsonschema --schemafile schemas/udlf/macro/v0.1.0.json examples/macros/*.udlf.yaml
 uvx check-jsonschema --schemafile schemas/udlf/lookup/v0.1.0.json examples/lookups/*.udlf.yaml

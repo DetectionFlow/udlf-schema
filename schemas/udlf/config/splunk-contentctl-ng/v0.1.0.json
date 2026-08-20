@@ -1,0 +1,521 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://detectionflow.com/schemas/udlf/config/splunk-contentctl-ng/v0.1.0.json",
+  "title": "UDLF deployment config — Splunk via contentctl-ng",
+  "description": "Optional, opt-in sub-schema for the `config` block of a UDLF deployment whose `platform` is `splunk-contentctl-ng`. This is a delivery path rather than a product: the deployer emits a contentctl-shaped detection YAML and hands it to the contentctl-ng pipeline (validate → build app → test) instead of building and uploading an app itself. The block mirrors the toolchain's own field names and nesting so the emitted file needs no translation, and it is closed with no `advanced` passthrough because contentctl-ng's models are `extra=\"forbid\"` at every level — an unmodelled key would fail the build anyway.\n\nThe platform name identifies the toolchain rather than a version of it. Splunk's `contentctl` line ends at v5.6; its successor is a rewrite published as `contentctl-ng`, which consumes the ESCU 6.x content format used by `splunk/security_content`. The sibling platform `splunk-contentctl-v5-6` targets that earlier format and carries its version in its name because that version cannot move; this one carries none, and a block pins the format it was authored against through `config.schema` instead.\n\n`type` decides the alerting shape, and does so strictly enough to encode here: TTP emits a finding plus optional intermediate findings, Anomaly emits intermediate findings only, Correlation emits a finding only, and Hunting emits neither and carries no threat objects. contentctl-ng enforces that matrix in code; this file enforces it in `allOf`, so a mismatch surfaces at authoring time rather than at build time.\n\nFields UDLF already owns are deliberately absent: the search itself comes from `detection_content`, ATT&CK IDs and CVEs from the top-level `threat` block, implementation and false-positive prose from `detection_context`, references from `detection_context.references`, tests from the top-level `tests` array, analytic stories from strategy membership, `status` from `lifecycle`, and the identity/version/date/author fields from `id`, `metadata` and `changelog`. `threat_group` is also absent — its values are ATT&CK group names and aliases, which the deployer resolves from `threat.groups` G-IDs via the same ATT&CK enrichment the build already runs. `deprecation_info` is absent because its `removed_in_version` names a content-pack release, which UDLF cannot know: a decommissioned detection says so through `lifecycle`, and its replacement through a `superseded_by` link.\n\nThere is deliberately no `severity` override here, unlike most platforms. ESCU 6.x has no per-detection severity field for a deployer to write: alert weight is expressed as an explicit integer `score` on each finding and intermediate-finding entity, authored directly below. `detection_context.severity` still informs the detection; it simply has nothing to override.\n\nDerived from `schemas/EventBasedDetection.schema.json` in `splunk/security_content` (ESCU 6.5.0, contentctl-ng 1.0.2). This schema is NOT referenced by the UDLF core schema; apply it separately when you want the block validated.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "category",
+    "security_domain",
+    "asset_type",
+    "data_source"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "enum": [
+              "TTP",
+              "Correlation"
+            ]
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "required": [
+          "finding"
+        ],
+        "$comment": "TTP and Correlation both raise a direct alert, so contentctl-ng requires a finding block (action.notable). The difference between them is what else they emit — see the intermediate_findings rules below."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "enum": [
+              "Anomaly",
+              "Hunting"
+            ]
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "not": {
+          "required": [
+            "finding"
+          ]
+        },
+        "$comment": "Anomaly contributes risk without alerting directly, and Hunting neither alerts nor scores, so neither may carry a finding. contentctl-ng rejects the block outright rather than ignoring it."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "Anomaly"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "required": [
+          "intermediate_findings"
+        ],
+        "$comment": "An Anomaly detection's only output is risk contribution, so intermediate_findings is mandatory — without it the detection would emit nothing at all."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "enum": [
+              "Correlation",
+              "Hunting"
+            ]
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "not": {
+          "required": [
+            "intermediate_findings"
+          ]
+        },
+        "$comment": "A Correlation fires on risk that other detections have already contributed, so contributing more would be circular; a Hunting detection scores nothing. contentctl-ng forbids the block on both."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "Hunting"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "threat_objects": {
+            "maxItems": 0
+          }
+        },
+        "$comment": "Threat objects are serialised into action.risk.param._risk, which a Hunting detection never emits. Upstream models this as 'must be empty' rather than 'must be absent', so an explicit empty list stays legal."
+      }
+    },
+    {
+      "not": {
+        "required": [
+          "schedule",
+          "custom_schedule"
+        ]
+      },
+      "$comment": "Exactly one of the two may be defined. Neither is required — omitting both selects the content pack's default schedule — but declaring both is contradictory and contentctl-ng rejects it."
+    }
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "pattern": "^splunk-contentctl-ng::[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "default": "splunk-contentctl-ng::0.1.0",
+      "description": "Self-identifying sub-schema version for this config block. Because the platform name carries no version, this pin is the block's only statement of which contentctl-ng format revision it was authored against."
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "TTP",
+        "Anomaly",
+        "Correlation",
+        "Hunting"
+      ],
+      "description": "contentctl-ng analytic type — the discriminator for the whole block. It determines the alerting shape: TTP emits a finding and optionally intermediate findings; Anomaly emits intermediate findings only; Correlation emits a finding only, firing on risk other detections have already contributed; Hunting emits neither and carries no threat objects. Those rules are enforced by the conditionals in this schema. It does not supply the schedule — see `schedule` and `custom_schedule`."
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "application",
+        "cloud",
+        "endpoint",
+        "network",
+        "web",
+        "deprecated"
+      ],
+      "description": "Detection category, required by contentctl-ng. Prefer the value matching the telemetry the search reads rather than the asset it protects. `deprecated` is a build-pipeline state and should not be authored here; express decommissioning through UDLF `lifecycle` instead."
+    },
+    "security_domain": {
+      "type": "string",
+      "enum": [
+        "access",
+        "audit",
+        "endpoint",
+        "identity",
+        "network",
+        "threat"
+      ],
+      "description": "ES security domain the detection belongs to."
+    },
+    "asset_type": {
+      "type": "string",
+      "enum": [
+        "Account",
+        "Amazon EKS Kubernetes cluster",
+        "Amazon EKS Kubernetes cluster Pod",
+        "Amazon Elastic Container Registry",
+        "AWS Account",
+        "AWS Federated Account",
+        "AWS Instance",
+        "Azure Active Directory",
+        "Azure Tenant",
+        "CircleCI",
+        "Cloud Compute Instance",
+        "Cloud Instance",
+        "Database Server",
+        "DNS Servers",
+        "EC2 Snapshot",
+        "Endpoint",
+        "GCP",
+        "GCP Account",
+        "GCP Kubernetes cluster",
+        "GCP Storage Bucket",
+        "GDrive",
+        "GitHub",
+        "Google Cloud Platform tenant",
+        "GSuite",
+        "Identity",
+        "Infrastructure",
+        "Kubernetes",
+        "Network",
+        "O365 Tenant",
+        "Okta Tenant",
+        "S3 Bucket",
+        "Splunk Server",
+        "VPN Appliance",
+        "Web Application",
+        "Web Proxy",
+        "Web Server",
+        "Windows"
+      ],
+      "description": "Type of asset the detection targets. contentctl-ng enforces this closed list, and it is not the same list the `splunk-contentctl-v5-6` sub-schema accepts — a detection carrying both deployments may need a different value in each, so the two cannot be assumed to share one."
+    },
+    "data_source": {
+      "type": "array",
+      "description": "Names of the data sources this detection relies on. Each must resolve to an entry under the content pack's `data_sources/` directory. A single entry may join several sources with ` AND ` when the search correlates across them via a join or subsearch. The key is required by contentctl-ng, and UDLF has no data-source concept of its own to derive it from, but the list may be empty — that is how a search whose sources the pack does not model is expressed.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "examples": [
+        [
+          "Sysmon EventID 1",
+          "Windows Event Log Security 4688"
+        ]
+      ]
+    },
+    "product": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "description": "Splunk products the detection is valid for. The enum has three members and contentctl-ng requires all three, so the only valid value is the full triple and the field carries no information. Modelled as optional for that reason: omit it and let the deployer emit the triple, or state it if you want the emitted YAML to be explicit.",
+      "items": {
+        "type": "string",
+        "enum": [
+          "Splunk Enterprise",
+          "Splunk Enterprise Security",
+          "Splunk Cloud"
+        ]
+      },
+      "examples": [
+        [
+          "Splunk Enterprise",
+          "Splunk Enterprise Security",
+          "Splunk Cloud"
+        ]
+      ]
+    },
+    "schedule": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Name of a schedule object defined under the content pack's `schedules/` directory. The enum upstream is populated at runtime from the pack, so it cannot be closed here; a stock ESCU pack ships `Default EventBasedDetection`. Mutually exclusive with `custom_schedule`; omitting both is normal and selects the pack's default.",
+      "examples": [
+        "Default EventBasedDetection"
+      ]
+    },
+    "custom_schedule": {
+      "type": "object",
+      "description": "Inline schedule, for a detection that genuinely needs different timing from every other detection in the pack. Mutually exclusive with `schedule`. contentctl-ng requires all four keys when the block is present, and constrains the time modifiers more tightly than raw Splunk does — see the patterns below.",
+      "additionalProperties": false,
+      "required": [
+        "cron_schedule",
+        "schedule_window",
+        "earliest_time",
+        "latest_time"
+      ],
+      "properties": {
+        "cron_schedule": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Cron expression for the saved search. Upstream validates this with a function rather than a pattern, so it is deliberately left unconstrained here rather than approximated with a regex that would reject valid expressions.",
+          "examples": [
+            "0 * * * *"
+          ]
+        },
+        "schedule_window": {
+          "type": "string",
+          "pattern": "^(auto|[0-9]+)$",
+          "description": "How far the scheduler may delay the search. `auto` is strongly preferred; an integer number of minutes is the only alternative accepted.",
+          "examples": [
+            "auto"
+          ]
+        },
+        "earliest_time": {
+          "type": "string",
+          "pattern": "^[+-][0-9]+(s|m|h|d|w|mon|q|y)(@(s|m|h|d|w|mon|q|y))?$",
+          "description": "Start of the search window as a Splunk relative-time modifier. contentctl-ng accepts a deliberately narrow subset of Splunk's time syntax: a signed offset with an optional snap. Bare `now`, `@d` and chained modifiers are rejected.",
+          "examples": [
+            "-70m@m"
+          ]
+        },
+        "latest_time": {
+          "type": "string",
+          "pattern": "^[+-][0-9]+(s|m|h|d|w|mon|q|y)(@(s|m|h|d|w|mon|q|y))?$",
+          "description": "End of the search window, under the same narrow syntax as `earliest_time`.",
+          "examples": [
+            "-10m@m"
+          ]
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "description": "The detection's primary alert, as an ES8 Finding. When present, `action.notable` is enabled and a Finding is generated on each firing, which both alerts directly and contributes risk. Required for TTP and Correlation, forbidden for Anomaly and Hunting.",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "entity"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Finding title, serialised to `action.notable.param.rule_title`. Supports `$field$` token substitution, resolved at alert-firing time against a field the search actually produces — contentctl-ng validates every token for production detections.",
+          "examples": [
+            "A download cradle was executed on $dest$ by $user$"
+          ]
+        },
+        "entity": {
+          "type": "object",
+          "description": "The single subject the finding is attributed to, serialised to `action.notable.param._entities`. Exactly one is permitted; any further scored entities belong in `intermediate_findings`.",
+          "additionalProperties": false,
+          "required": [
+            "field",
+            "type",
+            "score"
+          ],
+          "properties": {
+            "field": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Search field holding the entity (`risk_object_field`). Must be present in the search."
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "system",
+                "user",
+                "other"
+              ],
+              "description": "Category of the entity (`risk_object_type`)."
+            },
+            "score": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Risk contributed each time the detection fires (`risk_score`). This is where alert weight is expressed for this platform, which is why the config has no `severity` override. contentctl-ng imposes no upper bound. A score of 0 raises the finding without contributing any risk."
+            }
+          }
+        }
+      }
+    },
+    "intermediate_findings": {
+      "type": "object",
+      "description": "Risk-contributing entities that raise no direct alert, as ES8 Intermediate Findings. When present, `action.risk` is enabled and each entity is scored on every firing. Required for Anomaly, optional for TTP, forbidden for Correlation and Hunting.",
+      "additionalProperties": false,
+      "required": [
+        "entities"
+      ],
+      "properties": {
+        "entities": {
+          "type": "array",
+          "minItems": 1,
+          "description": "The scored entities. At least one is required whenever the block is present.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "field",
+              "type",
+              "score",
+              "message"
+            ],
+            "properties": {
+              "field": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Search field holding the entity (`risk_object_field`). Must be present in the search."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "system",
+                  "user",
+                  "other"
+                ],
+                "description": "Category of the entity (`risk_object_type`)."
+              },
+              "score": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Risk contributed by this entity each time the detection fires (`risk_score`). No upper bound; see the note on the finding entity's score."
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Risk message for this entity, supporting `$field$` token substitution. Required on every entity — the message is per-entity, not shared across the block.",
+                "examples": [
+                  "A download cradle was executed on $dest$"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "threat_objects": {
+      "type": "array",
+      "uniqueItems": true,
+      "description": "Indicators associated with the detection, serialised into `action.risk.param._risk` alongside any intermediate-finding entities. Permitted for TTP, Anomaly and Correlation; must be empty for Hunting.\n\nUniqueness is enforced because contentctl-ng's own generated schema enforces it. The model behind it is set-like, so a duplicate entry is silently collapsed at load time rather than rejected; rejecting it here surfaces the authoring slip instead of swallowing it.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "field",
+          "type"
+        ],
+        "properties": {
+          "field": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Search field holding the threat object. Must be present in the search."
+          },
+          "type": {
+            "type": "string",
+            "description": "Category of the threat object. contentctl-ng enforces this closed list at build time and there is deliberately no `other` fallback, so a type outside it cannot ship through this platform at all.\n\nThe list carries both `process` and `process_name` as distinct types. It still differs from the Splunk RBA community list in two places — `ip_address` here versus `ip` there, and `domain` versus `url_domain` — which is why `splunk-es` accepts both vocabularies. A detection carrying an ng deployment and a `splunk-es` deployment may legitimately spell the same concept differently in each; the two should not be rewritten to match.",
+            "enum": [
+              "certificate_common_name",
+              "certificate_organization",
+              "certificate_serial",
+              "certificate_unit",
+              "command",
+              "domain",
+              "email_address",
+              "email_subject",
+              "file_hash",
+              "file_name",
+              "file_path",
+              "http_user_agent",
+              "ip_address",
+              "process",
+              "process_name",
+              "parent_process",
+              "parent_process_name",
+              "process_hash",
+              "registry_path",
+              "registry_value_name",
+              "registry_value_text",
+              "service",
+              "signature",
+              "system",
+              "tls_hash",
+              "url"
+            ]
+          }
+        }
+      }
+    },
+    "drilldown_searches": {
+      "type": "array",
+      "description": "Drilldown searches surfaced with the alert. contentctl-ng requires at least two for production detections other than Hunting, one of which must contain the `%original_detection_search%` placeholder — that rule is gated on the detection being production, which lives outside this block (UDLF `lifecycle: live`), so it is a deployer-side check rather than a schema constraint. Omit entirely to let the build generate defaults from the finding and intermediate-finding entities.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "search",
+          "earliest_offset",
+          "latest_offset"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 5,
+            "description": "Display name of the drilldown."
+          },
+          "search": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Drilldown SPL. May contain `%original_detection_search%`, substituted with the detection's own search at build time."
+          },
+          "earliest_offset": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Start of the drilldown window. Required explicitly — there is no default. Commonly `$info_min_time$`.",
+            "examples": [
+              "$info_min_time$"
+            ]
+          },
+          "latest_offset": {
+            "type": "string",
+            "minLength": 1,
+            "description": "End of the drilldown window. Required explicitly — there is no default. Commonly `$info_max_time$`.",
+            "examples": [
+              "$info_max_time$"
+            ]
+          }
+        }
+      }
+    },
+    "baselines": {
+      "type": "array",
+      "uniqueItems": true,
+      "description": "Names of baseline objects this detection depends on, each resolving to an entry under the content pack's `baselines/` directory. The enum upstream is populated at runtime from the pack, so it cannot be closed here.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "atomic_guid": {
+      "type": "array",
+      "uniqueItems": true,
+      "description": "Atomic Red Team test GUIDs this detection covers, each matching an `auto_generated_guid` in the Atomic Red Team catalogue. Distinct from the UDLF `tests` array, which describes tests UDLF itself owns.",
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+      }
+    }
+  }
+}
