@@ -1,7 +1,8 @@
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.2.1.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.2.2.json
 #
-# Showcase: one threat-idea, two logic variants (SPL + KQL), two deployments on
-# different platforms — each at its own lifecycle stage and runtime mode.
+# Showcase: one threat-idea, two logic variants (SPL + KQL), four deployments on
+# different platforms and delivery paths — each at its own lifecycle stage and
+# runtime mode. Three of the four target Splunk; they differ in who builds the app.
 # The detection is overall in `testing`; the Splunk deployment is already `live`
 # and alerting, while the Sentinel deployment runs in `warranty` mode during testing.
 id: a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d
@@ -10,7 +11,7 @@ lifecycle: testing
 
 metadata:
   created_at: "2026-06-10"
-  version: "0.4.0"
+  version: "0.5.0"
   authors:
     - Alex Rivera
     - Detection Engineering Team
@@ -118,9 +119,9 @@ deployments:
     mode: alert
     lifecycle: live
     # Free-form to the UDLF core schema; optionally checked against
-    # schemas/udlf/config/splunk-es/v0.1.0.json as a separate, explicit pass.
+    # schemas/udlf/config/splunk-es/v0.2.0.json as a separate, explicit pass.
     config:
-      schema: splunk-es::0.1.0
+      schema: splunk-es::0.2.0
       schedule:
         cron: "*/10 * * * *"
         lookback: "-15m"
@@ -177,6 +178,41 @@ deployments:
           fields: [dest, SourceImage]
           period: 86400s             # contentctl rejects `1d` — s/m/h only
 
+  # The other contentctl pipeline: `contentctl-ng`, consuming the ESCU 6.x content
+  # format. A sibling platform to the block above rather than a newer version of it —
+  # the shapes differ. The toolchain name carries no version, so `schema:` is what
+  # pins the format this block is authored against.
+  - name: escu-6-content-pack
+    platform: splunk-contentctl-ng
+    mode: alert
+    lifecycle: development
+    config:
+      schema: splunk-contentctl-ng::0.1.0
+      type: TTP                        # TTP -> finding + optional intermediate findings
+      category: endpoint               # required by contentctl-ng
+      security_domain: endpoint
+      asset_type: Endpoint
+      data_source:
+        - Sysmon EventID 8
+      finding:                         # ES8 Finding: alerts and contributes risk
+        title: "Process injection on $dest$"
+        entity:                        # exactly one entity, never a list
+          field: dest
+          type: system
+          score: 70
+      intermediate_findings:           # risk contribution, no direct alert
+        entities:
+          - field: SourceImage
+            type: other
+            score: 40
+            # One risk message per entity.
+            message: "Process injection from $SourceImage$ observed on $dest$"
+      threat_objects:
+        - field: SourceImage
+          type: process
+      # contentctl-ng has no suppression field, so this detection's suppression is
+      # expressed only on the splunk-es and contentctl v5.6 deployments above.
+
   - name: sentinel-prod
     platform: sentinel
     mode: warranty
@@ -197,3 +233,7 @@ changelog:
     version: "0.4.0"
     author: Detection Engineering Team
     summary: Added Splunk deployment schedule, suppression and RBA annotation on the splunk-prod endpoint.
+  - date: "2026-08-20"
+    version: "0.5.0"
+    author: Detection Engineering Team
+    summary: Added a splunk-contentctl-ng deployment alongside the contentctl v5.6 one.

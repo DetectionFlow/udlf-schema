@@ -1,0 +1,459 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://detectionflow.com/schemas/udlf/config/splunk-es/v0.2.0.json",
+  "title": "UDLF deployment config — Splunk Enterprise Security",
+  "description": "Optional, opt-in sub-schema for the `config` block of a UDLF deployment whose `platform` is `splunk-es`. Same delivery path as `splunk` — a custom app built and uploaded by the deployer — plus the Enterprise Security features that produce notable events and risk-based alerting. This schema is NOT referenced by the UDLF core schema; the core schema leaves `config` free-form. Apply this file separately when you want the block validated. It is intentionally self-contained rather than composed from the `splunk` sub-schema: each platform config versions independently, so ES may diverge from Splunk Enterprise without an inheritance break. Deployment mechanics and secrets are deliberately absent — they are resolved from the deployment's named endpoint. Analytic-story membership is also absent: in UDLF that relationship is expressed by a strategy (see the UDLF strategy schema) and derived at build time, not duplicated here.\n\nEnterprise Security carries two shapes of risk annotation at once, and this schema accepts both, because a live instance genuinely contains both. In one, a single message describes the whole detection and lands in `action.risk.param._risk_message`; in the ES8 findings shape each risk object carries its own message, serialised per entry into `action.risk.param._risk[*].risk_message`, and the alert subject is carried in `action.notable.param._entities`. Content built by contentctl-ng uses the second shape exclusively. So `rba.message` is optional and `risk_objects[].risk_message` and `notable.entities` exist alongside it — but a block carrying risk objects must supply a message one way or the other, which the conditional below enforces. Never rewrite between the two shapes on import: what ES returns is what the detection actually deploys.\n\nTwo places where this schema is looser than a build tool would be, because ES is. `notable.entities` accepts `N/A` alongside the three values contentctl authors, because both ES and contentctl write it as the placeholder for a notable with no single attributed entity — `rba.risk_objects` does not, because a list with nothing to score is simply empty and needs no placeholder. And an `rba` block may carry a message with no risk or threat objects at all: that is what ES returns when the risk action is enabled and `_risk` is empty, so requiring one or the other would reject a real state.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "type": "string",
+      "pattern": "^splunk-es::[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "default": "splunk-es::0.2.0",
+      "description": "Self-identifying sub-schema version for this config block. Lets the block declare which revision of the Splunk ES config shape it was authored against, so this sub-schema can version independently of UDLF core."
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "informational"
+      ],
+      "description": "Severity for this deployment. **Optional — omit it and the deployer uses `detection_context.severity`.** Set it only to override the detection's severity for this target. Always uses UDLF's own vocabulary, whatever the platform's native scale is, so an author never has to know the vendor spelling; the deployer translates. Maps to `action.notable.param.severity`, which takes these same five values in this same casing, so the mapping is exact.",
+      "examples": [
+        "high"
+      ]
+    },
+    "schedule": {
+      "type": "object",
+      "description": "When the saved search runs. Supply exactly one of `cron` or `frequency` — `frequency` is authoring sugar that the deployer expands into a cron expression.",
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "cron"
+          ]
+        },
+        {
+          "required": [
+            "frequency"
+          ]
+        }
+      ],
+      "properties": {
+        "cron": {
+          "type": "string",
+          "description": "Cron expression governing when the search runs. Maps to savedsearches.conf `cron_schedule`. The pattern is fully anchored — JSON Schema `pattern` searches for a substring by default, which would otherwise accept any string merely containing a cron-shaped fragment.",
+          "pattern": "^((@(annually|yearly|monthly|weekly|daily|hourly|reboot))|(@every (\\d+(ns|us|ms|s|m|h))+)|((((\\d+,)+\\d+|([\\d\\*]+(\\/|-)\\d+)|\\d+|\\*) ?){5,7}))$",
+          "examples": [
+            "0 * * * *",
+            "*/10 * * * *"
+          ]
+        },
+        "frequency": {
+          "type": "string",
+          "description": "Recurring interval, expanded to a cron expression by the deployer. Splunk supports 1-59m, 1-23h or 1-30d only — anything more complex must use `cron`. Zero is not a valid interval. Do not put a cron expression in this field.",
+          "pattern": "^(([1-9]|[1-5][0-9])m|([1-9]|1[0-9]|2[0-3])h|([1-9]|[1-2][0-9]|30)d)$",
+          "examples": [
+            "15m",
+            "4h",
+            "2d"
+          ]
+        },
+        "lookback": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Start of the search window, as a Splunk relative-time modifier. Maps to `dispatch.earliest_time`.",
+          "examples": [
+            "-70m@m",
+            "-24h@h"
+          ]
+        },
+        "latest_time": {
+          "type": "string",
+          "minLength": 1,
+          "description": "End of the search window, as a Splunk relative-time modifier. Maps to `dispatch.latest_time`.",
+          "examples": [
+            "-10m@m",
+            "now"
+          ]
+        },
+        "schedule_window": {
+          "type": "string",
+          "minLength": 1,
+          "description": "How far the scheduler may delay this search to reduce contention. Maps to `schedule_window`.",
+          "examples": [
+            "auto",
+            "0"
+          ]
+        }
+      }
+    },
+    "suppression": {
+      "type": "object",
+      "description": "Alert throttling — discard repeat alerts sharing the same values for `fields` within `window`. Maps to the savedsearches.conf `alert.suppress.*` keys. Distinct from `notable.nes_fields`, which suppresses at the notable-event layer inside ES.",
+      "additionalProperties": false,
+      "required": [
+        "fields",
+        "window"
+      ],
+      "properties": {
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Fields whose matching values identify a duplicate alert. Each must be produced by the search. Maps to `alert.suppress.fields`.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^ ]+$",
+            "description": "A field name. Spaces are not supported — the conf value is comma-delimited and unquoted."
+          }
+        },
+        "window": {
+          "type": "string",
+          "pattern": "^[0-9]+[smhd]$",
+          "description": "How long duplicate alerts are suppressed. Maps to `alert.suppress.period`.",
+          "examples": [
+            "1h",
+            "24h",
+            "86400s"
+          ]
+        }
+      }
+    },
+    "threshold": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "description": "Number of events that must be exceeded within the search window before the alert fires. 0 means fire on any result.",
+      "examples": [
+        0,
+        10
+      ]
+    },
+    "notable": {
+      "type": "object",
+      "description": "Notable-event configuration, emitted as the `action.notable.*` conf keys. Relevant when the deployment's `mode` is `alert`; a `monitoring` deployment normally omits this and carries `rba` only. Note there is no `severity` here: ES's notable severity vocabulary is exactly UDLF's (`critical`/`high`/`medium`/`low`/`informational`, same casing), so `detection_context.severity` maps straight onto `action.notable.param.severity` and the deployer applies it. On import, read that conf key back into `detection_context.severity` rather than into this block.",
+      "additionalProperties": false,
+      "properties": {
+        "rule_title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Notable event title. Supports `$field$` token substitution from the search results. Maps to `action.notable.param.rule_title`.",
+          "examples": [
+            "New abnormal credential added to Azure AD by $user$"
+          ]
+        },
+        "rule_description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Notable event description. Supports `$field$` token substitution. Maps to `action.notable.param.rule_description`."
+        },
+        "entities": {
+          "type": "array",
+          "minItems": 1,
+          "description": "The alert subjects this notable is attributed to, as carried in `action.notable.param._entities`. A notable in the ES8 findings shape has exactly one; the array is left unbounded here because this schema records what an instance returns rather than what a build tool would accept. Each entity is risk-scored through the notable action, so it does not also appear under `rba.risk_objects`. Where a notable has no single attributed entity the tool writes one sentinel row instead — field `N/A`, type `N/A`, score `0` — and the real entities are carried in `rba.risk_objects`. Read that row as \"no entity here\", not as an entity.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "field",
+              "type",
+              "score"
+            ],
+            "properties": {
+              "field": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Search field holding the entity (`risk_object_field`)."
+              },
+              "type": {
+                "type": "string",
+                "description": "Category of the entity. ES does not constrain this field — it is written verbatim into `action.notable.param._entities` and read back the same way — but this schema does, deliberately. `system`, `user` and `other` are the values the risk framework is built around and the only three either contentctl version will author; `other` is accepted here even though live exports have not shown it, because an entity may legitimately be neither a system nor a user. `N/A` is the fourth because ES and contentctl write it themselves: where a notable has no single attributed entity, `_entities` is filled with the sentinel row `{\"risk_object_field\": \"N/A\", \"risk_object_type\": \"N/A\", \"risk_score\": 0}` and the real entities are carried in `action.risk.param._risk` instead. It is a placeholder for the absence of an entity rather than a category of one, so a row typed `N/A` should have field `N/A` and score `0` too. Anything else — a field name in the type slot, most often — is a defect in the source rule rather than a shape this schema should learn to accept.",
+                "enum": [
+                  "system",
+                  "user",
+                  "other",
+                  "N/A"
+                ]
+              },
+              "score": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100000,
+                "description": "Risk contributed by this entity when the notable fires (`risk_score`). Required: ES writes all three keys on every entity, including the sentinel row, where the score is `0`. The ceiling is a sanity limit rather than an ES constraint, matching `rba.risk_objects`."
+              }
+            }
+          }
+        },
+        "nes_fields": {
+          "type": "array",
+          "description": "Notable Event Suppression fields — the fields ES offers analysts when creating a suppression from this notable. Maps to `action.notable.param.nes_fields`. Not the same as `suppression.fields`, which throttles the saved search itself.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "user",
+              "dest"
+            ]
+          ]
+        },
+        "security_domain": {
+          "type": "string",
+          "enum": [
+            "access",
+            "endpoint",
+            "network",
+            "threat",
+            "identity",
+            "audit"
+          ],
+          "description": "ES categorisation of the notable event. Maps to `action.notable.param.security_domain`.",
+          "examples": [
+            "threat"
+          ]
+        }
+      }
+    },
+    "rba": {
+      "type": "object",
+      "description": "Risk-Based Alerting. Attributes a risk score to one or more entities so ES can aggregate risk over time and fire risk incident rules. Emitted as `action.risk.param._risk`. A `monitoring` deployment typically carries `rba` without `notable` — it contributes risk without raising an alert.",
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable description of the risk activity, describing the detection as a whole. Supports `$field$` token substitution from the search results. Maps to `action.risk.param._risk_message`. Optional: content in the ES8 findings shape carries a message on each risk object instead — see `risk_objects[].risk_message`. Supply one or the other whenever the block carries risk objects.",
+          "examples": [
+            "Suspicious activity to $domain$ from $user$"
+          ]
+        },
+        "risk_objects": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Entities that accrue risk from this detection. Note that `score` is per risk object, not per detection — ES scores each entity independently.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "field",
+              "type",
+              "score"
+            ],
+            "properties": {
+              "field": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Search field holding the risk object's identifier. Must be produced by the search. Maps to `risk_object_field`."
+              },
+              "type": {
+                "type": "string",
+                "description": "Category of the risk object. ES does not constrain this field — it is written verbatim into `action.risk.param._risk` and read back the same way — but this schema does, deliberately. These are the three values the risk framework is built around and the only three either contentctl version will author. Unlike `notable.entities`, there is no `N/A` here: that value is a placeholder for a slot that must hold something, and `_risk` is a list, so when there is nothing to score it is simply empty. An `N/A` in this position would be an anomaly, as would a field name in the type slot — the most common defect — and failing here is how either gets noticed.",
+                "enum": [
+                  "system",
+                  "user",
+                  "other"
+                ]
+              },
+              "score": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100000,
+                "description": "Risk contributed to this object each time the detection fires, before risk factors are applied. Maps to `risk_score`. ES accepts 0, so it validates here, but a 0 contributes no risk at all and is almost always a misconfiguration rather than an intent. Note contentctl enforces a 1-100 range, so a detection also deployed via `splunk-contentctl-v5-6` has a narrower valid range than this."
+              },
+              "risk_message": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Message for this risk object alone, in the ES8 findings shape. Supports `$field$` token substitution. Serialised into the entity's entry in `action.risk.param._risk` as `risk_message`, so different entities on one detection may carry different text. Not mutually exclusive with the block-level `message`: a block may carry both, and ES applies the per-object value to that object."
+              }
+            }
+          }
+        },
+        "threat_objects": {
+          "type": "array",
+          "description": "Indicators associated with the risk event — tracked across risk objects rather than scored themselves.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "field",
+              "type"
+            ],
+            "properties": {
+              "field": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Search field holding the threat object's value. Must be produced by the search. Maps to `threat_object_field`."
+              },
+              "type": {
+                "type": "string",
+                "description": "Category of the threat object. Maps to `threat_object_type`.\n\nSplunk ES does not constrain this value — it is stored as a free string on the risk event — so the enum here is a typo guard over the vocabularies that actually occur, not a platform rule. Two conventions are in circulation and this accepts both:\n\n- The **Splunk RBA community list** (https://splunk.github.io/rba/searches/threat_object_types/), e.g. `ip`, `process_name`, `url_domain`, `ssl_serial`. Prefer these when authoring new content — they are what the published RBA searches and dashboards group on.\n- **contentctl's list**, e.g. `ip_address`, `process`, `domain`, `certificate_serial`. contentctl writes these verbatim into savedsearches.conf, so any ES instance running an ESCU or contentctl-built app contains them — around a third of ESCU threat objects use a spelling absent from the RBA list. Importers must accept them, and must not rewrite them: the same detection's `splunk-contentctl-v5-6` deployment requires the contentctl spelling.\n\nNear-equivalents across the two, for anyone normalising downstream: `ip_address`/`ip`, `domain`/`url_domain`, `email_subject`/`subject`, `tls_hash`/`ja3_hash`, `certificate_*`/`ssl_*`. Three contentctl values have no RBA counterpart — `process` and `signature` have no equivalent at all, and `system` is a risk-object type used as a threat object. Do not translate blindly.\n\nUse `other` for anything genuinely outside both lists.",
+                "enum": [
+                  "app",
+                  "ssid",
+                  "url_domain",
+                  "url",
+                  "http_user_agent",
+                  "http_referrer",
+                  "ip",
+                  "asn",
+                  "location",
+                  "command",
+                  "user",
+                  "subject",
+                  "file_name",
+                  "file_hash",
+                  "parent_process",
+                  "parent_process_name",
+                  "parent_process_path",
+                  "parent_process_hash",
+                  "process_name",
+                  "process_hash",
+                  "process_path",
+                  "registry_path",
+                  "registry_hive",
+                  "registry_key_name",
+                  "registry_value_name",
+                  "registry_value_text",
+                  "registry_value_data",
+                  "registry_value_type",
+                  "service",
+                  "service_name",
+                  "service_path",
+                  "service_hash",
+                  "service_dll",
+                  "service_dll_path",
+                  "service_dll_hash",
+                  "ssl_certificate",
+                  "ssl_issuer_common_name",
+                  "ssl_subject_common_name",
+                  "ssl_issuer_organization",
+                  "ssl_subject_organization",
+                  "ssl_issuer_unit",
+                  "ssl_subject_unit",
+                  "ssl_serial",
+                  "ja3_hash",
+                  "ja4_hash",
+                  "jarm_hash",
+                  "cyu_hash",
+                  "certificate_common_name",
+                  "certificate_organization",
+                  "certificate_serial",
+                  "certificate_unit",
+                  "domain",
+                  "email_address",
+                  "email_subject",
+                  "file_path",
+                  "ip_address",
+                  "process",
+                  "signature",
+                  "system",
+                  "tls_hash",
+                  "other"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "anyOf": [
+            {
+              "not": {
+                "required": [
+                  "risk_objects"
+                ]
+              }
+            },
+            {
+              "required": [
+                "message"
+              ]
+            },
+            {
+              "required": [
+                "risk_objects"
+              ],
+              "properties": {
+                "risk_objects": {
+                  "items": {
+                    "required": [
+                      "risk_message"
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "$comment": "A risk annotation with no message at all is not useful: ES renders an empty risk event. So a block carrying risk objects must supply either a block-level message (the older shape) or a risk_message on every risk object (the ES8 findings shape). A block carrying only threat objects — which an ES8 detection whose alert subject lives in notable.entities produces — needs neither."
+        }
+      ]
+    },
+    "drilldown_searches": {
+      "type": "array",
+      "description": "Secondary searches surfaced alongside the notable to speed up triage. Emitted as `action.notable.param.drilldown_*`.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "search"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Label shown to the analyst. Supports `$field$` token substitution."
+          },
+          "search": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Drilldown SPL. Supports `$field$` token substitution from the notable."
+          },
+          "earliest_offset": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Start of the drilldown's search window. Commonly `$info_min_time$` — the notable's own window start.",
+            "examples": [
+              "$info_min_time$"
+            ]
+          },
+          "latest_offset": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "End of the drilldown's search window. Commonly `$info_max_time$`.",
+            "examples": [
+              "$info_max_time$"
+            ]
+          }
+        }
+      }
+    },
+    "advanced": {
+      "type": "object",
+      "description": "Escape hatch for savedsearches.conf keys this sub-schema does not model. Values of any JSON type are accepted. A raw conf value is a string and passes through verbatim, so it must be spelled exactly as Splunk expects; objects and arrays are accepted too, for a deployer that would rather carry a structured conf value — `action.notable.param._entities` and `action.risk.param._risk` are JSON documents inside a conf string — as the structure it actually is, and serialise it on the way out. Either way the content is unvalidated and invisible to tooling, so prefer a modelled field where one exists.",
+      "examples": [
+        {
+          "action.correlationsearch.annotations": "{}",
+          "dispatch.ttl": "2p",
+          "action.risk.param._risk": [
+            {
+              "risk_object_field": "dest",
+              "risk_object_type": "system",
+              "risk_score": 70
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
