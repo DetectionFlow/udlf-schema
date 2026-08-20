@@ -45,7 +45,7 @@ directly at the published URLs and superseded versions stay resolvable alongside
 │       ├── strategy/
 │       │   └── v0.2.0.json           # Strategy JSON Schema
 │       └── config/                   # Opt-in per-platform deployment config sub-schemas
-│           ├── splunk/v0.1.0.json
+│           ├── splunk/v0.2.0.json
 │           ├── splunk-es/v0.2.0.json
 │           ├── splunk-contentctl-v5-6/v0.1.0.json
 │           ├── splunk-contentctl-ng/v0.1.0.json

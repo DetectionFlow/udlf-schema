@@ -556,7 +556,7 @@ explicit pass when you want the block checked:
 
 | `platform` | Sub-schema |
 |---|---|
-| `splunk` | `schemas/udlf/config/splunk/v0.1.0.json` |
+| `splunk` | `schemas/udlf/config/splunk/v0.2.0.json` |
 | `splunk-es` | `schemas/udlf/config/splunk-es/v0.2.0.json` |
 | `splunk-contentctl-v5-6` | `schemas/udlf/config/splunk-contentctl-v5-6/v0.1.0.json` |
 | `splunk-contentctl-ng` | `schemas/udlf/config/splunk-contentctl-ng/v0.1.0.json` |
@@ -581,7 +581,7 @@ config:
 
 The pin is exact rather than compatible-within-major: pre-1.0 semver makes no compatibility
 promise, so a block pinned to `0.1.0` keeps validating against `0.1.0` after a later revision
-ships. `splunk-es` is the first to have two, and both stay served. Omit `schema` to validate against the highest revision available.
+ships. `splunk` and `splunk-es` are the first with two revisions each, and all four stay served. Omit `schema` to validate against the highest revision available.
 
 Where a platform name carries a **tool** version, the two numbers are unrelated axes and
 `splunk-contentctl-v5-6::0.1.0` reads as both at once: the platform fixes the target format
@@ -645,6 +645,13 @@ differ. Three worth knowing about, all of which the schemas will catch:
   block carrying risk objects must supply a message one way or the other. As with threat-object
   spellings, never rewrite between the shapes on import — what ES returns is what the detection
   actually deploys.
+- **Where ES enforces nothing, `splunk-es` enforces nothing.** `risk_object_type` is free text on
+  the risk event, so it is an open string rather than an enum: a live instance contains `N/A` for an
+  entity with no applicable category, and occasionally a field name that someone put in the type
+  slot. Both are recorded rather than rejected. An `rba` block carrying only a message is legal for
+  the same reason — that is what ES returns when the risk action is enabled and `_risk` is empty.
+  `threat_object_type` stays enumerated, because there the enum is a union of two *documented*
+  vocabularies and earns its keep as authoring help.
 
 Note also that `score` sits on each **risk object**, not on the `rba` block — Splunk ES scores each
 entity independently, and both contentctl and the ES conf keys reflect that.
