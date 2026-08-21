@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://detectionflow.com/schemas/udlf/v0.2.0.json",
-  "title": "UDLF Detection Schema v0.2.0",
-  "description": "UDLF detection schema. One threat-idea, many logic variants, many deployment targets, each with its own lifecycle stage and runtime mode.",
+  "$id": "https://detectionflow.com/schemas/udlf/v0.3.0.json",
+  "title": "UDLF Detection Schema v0.3.0",
+  "description": "UDLF detection schema. One threat-idea, many logic variants, many deployment targets.",
   "type": "object",
   "required": ["id", "title", "lifecycle", "metadata"],
   "additionalProperties": false,
@@ -56,11 +56,38 @@
         "properties": {
           "language": {
             "type": "string",
-            "enum": ["spl", "kql", "sigma", "yara", "yara-l", "python", "sql"],
-            "description": "Query language of this logic variant. 'sigma' embeds a native Sigma rule object."
+            "enum": ["spl", "kql", "cql", "sigma", "yara", "yara-l", "python", "sql"],
+            "description": "Query language of this variant. 'sigma' embeds a native Sigma object. 'cql' is CrowdStrike Query Language."
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Short label distinguishing variants that share a language. Documentation only, not a deploy-time selector."
           },
           "logic": {
             "description": "The detection logic. A raw query string, or an embedded Sigma rule object when language is 'sigma'."
+          },
+          "requires": {
+            "type": "array",
+            "description": "Macros and lookups this variant's logic depends on, each its own UDLF document. Declared per variant, not per detection.",
+            "items": {
+              "type": "object",
+              "required": ["type", "name"],
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["macro", "lookup"],
+                  "description": "Which kind of supporting document this is."
+                },
+                "name": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{2,63}$",
+                  "description": "The supporting document's 'name', the same token that appears in this variant's logic."
+                }
+              }
+            }
           }
         },
         "allOf": [
@@ -101,7 +128,7 @@
         },
         "false_positives": {
           "type": "string",
-          "description": "Known false-positive scenarios. Free text (multiline)."
+          "description": "Known false-positive scenarios. Free text."
         },
         "implementation_guidance": {
           "type": "string",
@@ -299,11 +326,11 @@
           },
           "source_id": {
             "type": "string",
-            "description": "derived_from: the source's own identifier (e.g. the upstream Sigma or ESCU rule UUID)."
+            "description": "derived_from: the source's own identifier, e.g. the upstream Sigma or ESCU rule UUID."
           },
           "source_format": {
             "type": "string",
-            "description": "derived_from: the format the detection was translated from (e.g. sigma, escu, splunk). Open/extensible.",
+            "description": "derived_from: the format translated from (e.g. sigma, escu, splunk). Open/extensible.",
             "examples": ["sigma", "escu", "splunk", "elastic"]
           },
           "source_version": {
@@ -325,38 +352,54 @@
     },
     "deployments": {
       "type": "array",
-      "description": "Where and how this detection runs. 'platform' is the discriminator; 'mode' is the runtime behaviour.",
+      "description": "Where and how this detection runs. 'platform' is the discriminator; alerting is read from 'config'.",
       "items": {
         "type": "object",
-        "required": ["platform", "mode"],
+        "required": ["platform"],
         "additionalProperties": false,
         "properties": {
           "name": {
             "type": "string",
             "minLength": 1,
-            "description": "Friendly endpoint name (e.g. splunk-prod), resolved to real infrastructure by the deployer. Omit when the platform has one endpoint."
+            "description": "Friendly endpoint name (e.g. splunk-prod), resolved to real infrastructure by the deployer. Required for platform 'udlf'."
           },
           "platform": {
             "type": "string",
             "description": "Deployment target and discriminator. Selects the logic variant and scopes 'config'. Open/extensible.",
-            "examples": ["splunk", "splunk-es", "splunk-contentctl-v5-6", "sentinel", "defender-for-endpoint", "crowdstrike", "sentinel-one", "elastic"]
-          },
-          "mode": {
-            "type": "string",
-            "enum": ["alert", "warranty", "monitoring", "disabled"],
-            "description": "Runtime behaviour. alert = raises alerts/notables. warranty = runs against known-good/known-bad data. monitoring = runs without alerting. disabled = present but not executing."
+            "examples": ["splunk", "splunk-es", "splunk-contentctl-v5-6", "splunk-contentctl-ng", "sentinel", "defender-for-endpoint", "crowdstrike", "sentinel-one", "elastic", "udlf"]
           },
           "lifecycle": {
             "type": "string",
             "enum": ["research", "development", "testing", "live", "decommissioned"],
-            "description": "Lifecycle stage of this specific deployment. Inherits the top-level 'lifecycle' when omitted."
+            "description": "Lifecycle stage of this deployment. Inherits top level when omitted. 'decommissioned' is removed, not shipped disabled."
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether this deployment executes once shipped. Default true. false means created but not executing."
           },
           "config": {
             "type": "object",
-            "description": "Free-form deployment config, scoped by the sibling 'platform'. Not validated here. Opt-in sub-schemas under schemas/udlf/config/<platform>/.",
+            "description": "Free-form config, scoped by the sibling 'platform'. Not validated here. Opt-in sub-schemas under schemas/udlf/config/<platform>/.",
             "additionalProperties": true
           }
-        }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": ["platform"],
+              "properties": { "platform": { "const": "udlf" } }
+            },
+            "then": { "required": ["name"] }
+          },
+          {
+            "if": {
+              "required": ["lifecycle"],
+              "properties": { "lifecycle": { "const": "decommissioned" } }
+            },
+            "then": { "properties": { "enabled": { "const": false } } }
+          }
+        ]
       }
     },
     "changelog": {

@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.2.2.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.3.0.json
 id: 550e8400-e29b-41d4-a716-446655440000
 title: Detect PowerShell Download Cradle
 lifecycle: live
@@ -72,7 +72,6 @@ tests:
 deployments:
   - name: splunk-prod
     platform: splunk-es
-    mode: alert
     lifecycle: live
     # Free-form to the UDLF core schema. Optionally checked against
     # schemas/udlf/config/splunk-es/v0.2.0.json as a separate, explicit pass.
@@ -84,7 +83,7 @@ deployments:
       suppression:                   # throttles the saved search itself
         fields: [ComputerName, User]
         window: "1h"
-      notable:                       # mode=alert -> raise a notable...
+      notable:                       # presence of `notable` is what makes this alerting...
         rule_title: "PowerShell download cradle on $ComputerName$"
         rule_description: "%description%"
         nes_fields: [ComputerName, User]
@@ -112,3 +111,9 @@ changelog:
     version: "1.3.0"
     author: Detection Engineering Team
     summary: Added Splunk deployment schedule, suppression and RBA annotation on the splunk-prod endpoint.
+  - date: "2026-08-20"
+    version: "1.4.0"
+    author: Detection Engineering Team
+    summary: >-
+      Migrated to UDLF v0.3.0 — dropped the deployment `mode` field. The presence of
+      the `notable` block is now what marks splunk-prod as alerting.

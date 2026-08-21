@@ -1,10 +1,12 @@
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.2.2.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.3.0.json
 #
-# Showcase: one threat-idea, two logic variants (SPL + KQL), four deployments on
-# different platforms and delivery paths — each at its own lifecycle stage and
-# runtime mode. Three of the four target Splunk; they differ in who builds the app.
+# Showcase: one threat-idea, two logic variants (SPL + KQL), five deployments on
+# different platforms and delivery paths — each at its own lifecycle stage. Three
+# target Splunk and differ in who builds the app; one is target-agnostic.
 # The detection is overall in `testing`; the Splunk deployment is already `live`
-# and alerting, while the Sentinel deployment runs in `warranty` mode during testing.
+# and alerting, the Sentinel one runs without opening incidents, and the
+# contentctl-ng pack ships disabled. Whether a deployment alerts is read from its
+# platform config — UDLF v0.3.0 has no cross-vendor `mode` field.
 id: a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d
 title: Process Injection with Defensive Tooling Tampering
 lifecycle: testing
@@ -116,7 +118,6 @@ links:
 deployments:
   - name: splunk-prod                # friendly endpoint; resolves to infra/secrets in CI
     platform: splunk-es              # discriminator: selects the spl variant + scopes config
-    mode: alert
     lifecycle: live
     # Free-form to the UDLF core schema; optionally checked against
     # schemas/udlf/config/splunk-es/v0.2.0.json as a separate, explicit pass.
@@ -153,7 +154,6 @@ deployments:
   # stable across majors; this config must convert to a contentctl v5.6 detection.
   - name: escu-content-pack
     platform: splunk-contentctl-v5-6
-    mode: alert
     lifecycle: development
     config:
       schema: splunk-contentctl-v5-6::0.1.0
@@ -184,8 +184,10 @@ deployments:
   # pins the format this block is authored against.
   - name: escu-6-content-pack
     platform: splunk-contentctl-ng
-    mode: alert
     lifecycle: development
+    enabled: false                   # ESCU 6.x ships every detection disabled and has
+                                     # no enable flag; `true` would oblige the deployer
+                                     # to switch it on after install.
     config:
       schema: splunk-contentctl-ng::0.1.0
       type: TTP                        # TTP -> finding + optional intermediate findings
@@ -215,9 +217,27 @@ deployments:
 
   - name: sentinel-prod
     platform: sentinel
-    mode: warranty
     # lifecycle omitted -> inherits the top-level `testing`
-    # sentinel is pass-through today: no platform-specific block validated yet
+    config:
+      schema: sentinel::0.1.0
+      alert:
+        # Runs on live data and raises alerts into the table, but opens no
+        # incident, so nothing reaches the SOC queue. On sentinel this is how a
+        # deployment says it does not alert.
+        create_incident: false
+
+  # Target-agnostic. `platform: udlf` names no product and selects
+  # no logic variant: the deployer reads `detection_content` and decides. `name`
+  # is required here because it is the only thing identifying the target.
+  - name: new-datalake
+    platform: udlf
+    lifecycle: development
+    config:
+      schema: udlf::0.1.0
+      mode: monitoring               # the one place `mode` survives in UDLF
+      schedule:
+        cron: "*/30 * * * *"
+        lookback: "-35m"
 
 # Append-only history. Latest date is the effective last-updated; version ties a change to a release.
 changelog:
@@ -237,3 +257,11 @@ changelog:
     version: "0.5.0"
     author: Detection Engineering Team
     summary: Added a splunk-contentctl-ng deployment alongside the contentctl v5.6 one.
+  - date: "2026-08-20"
+    version: "0.6.0"
+    author: Detection Engineering Team
+    summary: >-
+      Migrated to UDLF v0.3.0 — dropped the deployment `mode` field. sentinel-prod's
+      `warranty` became a sentinel config that raises no incidents; the contentctl-ng
+      pack now states `enabled: false`; added a target-agnostic udlf deployment for the
+      external SOC-dashboard feed.

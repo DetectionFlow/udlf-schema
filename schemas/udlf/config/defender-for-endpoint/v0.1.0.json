@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://detectionflow.com/schemas/udlf/config/defender-for-endpoint/v0.1.0.json",
   "title": "UDLF deployment config — Microsoft Defender for Endpoint",
-  "description": "Optional, opt-in sub-schema for the `config` block of a UDLF deployment whose `platform` is `defender-for-endpoint`. Covers Microsoft Defender for Endpoint custom detection rules: schedule, alert presentation, impacted-entity mapping, response actions and device scoping. The KQL query is not here — it lives in `detection_content` like any other language variant. Neither are the fields UDLF already owns: maturity and runtime behaviour come from `lifecycle` and `mode`, authorship from `metadata.authors`, and each target tenant is its own deployment entry. Vendor-assigned rule ids are absent too, because UDLF is desired-state only — reconciling against what is actually deployed is the deployer's job. ATT&CK techniques come from the top-level `threat` block, but `alert.category` is modelled here: it is MDE's own threat taxonomy, not ATT&CK, and it gates which techniques the UI offers. Note that `actions` can isolate devices, quarantine files and disable users, so a deployment carrying them is doing more than detecting — check the UDLF deployment `mode` still reflects reality. Every field notes the MDE API property it maps to. This schema is NOT referenced by the UDLF core schema; apply it separately when you want the block validated.",
+  "description": "Config for `platform: defender-for-endpoint`. MDE custom detection rules: schedule, alert, impacted entities, response actions, scoping. Query lives in `detection_content`.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -10,7 +10,7 @@
       "type": "string",
       "pattern": "^defender-for-endpoint::[0-9]+\\.[0-9]+\\.[0-9]+$",
       "default": "defender-for-endpoint::0.1.0",
-      "description": "Self-identifying sub-schema version for this config block, so this file can version independently of UDLF core."
+      "description": "Sub-schema revision this block was authored against, e.g. `defender-for-endpoint::0.1.0`."
     },
     "severity": {
       "type": "string",
@@ -21,7 +21,7 @@
         "low",
         "informational"
       ],
-      "description": "Severity for this deployment. **Optional — omit it and the deployer uses `detection_context.severity`.** Set it only to override the detection's severity for this target. Always uses UDLF's own vocabulary, whatever the platform's native scale is, so an author never has to know the vendor spelling; the deployer translates. Maps to `detectionAction.alertTemplate.severity`. MDE has no `Critical`, so the deployer collapses `critical` to `High` — set this explicitly if you want a different collapse.",
+      "description": "Severity for this deployment. Optional, overrides `detection_context.severity`. MDE has no `Critical`.",
       "examples": [
         "high"
       ]
@@ -35,12 +35,12 @@
         "12H",
         "24H"
       ],
-      "description": "How often the query runs. MDE couples frequency to lookback rather than letting you set them separately: 24H checks the past 30 days, 12H the past 48 hours, 3H the past 12 hours, 1H the past 4 hours, and NRT evaluates events continuously as they are ingested. NRT is supported only for specific tables and columns. Maps to `schedule`."
+      "description": "How often the query runs. MDE couples frequency to lookback: 24H/30d, 12H/48h, 3H/12h, 1H/4h, NRT continuous. Maps to `schedule`."
     },
     "alert": {
       "type": "object",
       "additionalProperties": false,
-      "description": "How the alert presents when the rule fires. Title, description and severity override what the deployer would otherwise take from the detection. Maps to `detectionAction.alertTemplate`.",
+      "description": "How the alert presents when the rule fires. Maps to `detectionAction.alertTemplate`.",
       "properties": {
         "title": {
           "type": "string",
@@ -50,7 +50,7 @@
         "description": {
           "type": "string",
           "minLength": 1,
-          "description": "Alert description giving analysts context on the threat. Overrides `detection_context.description`. Maps to `detectionAction.alertTemplate.description`."
+          "description": "Alert description for analysts. Overrides `detection_context.description`. Maps to `alertTemplate.description`."
         },
         "category": {
           "type": "string",
@@ -73,7 +73,7 @@
             "Discovery",
             "Impact"
           ],
-          "description": "MDE threat category for the alert. This is Microsoft's own taxonomy, not ATT&CK — it overlaps tactic names but includes Malware, Ransomware, Unwanted Software and Suspicious Activity, and it determines which techniques the MDE UI will offer. Maps to `detectionAction.alertTemplate.category`."
+          "description": "MDE threat category for the alert. Microsoft's own taxonomy, not ATT&CK. Gates which techniques the UI offers."
         },
         "recommendation": {
           "type": "string",
@@ -85,7 +85,7 @@
     "impacted_entities": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Which query columns identify the affected assets. MDE uses these to build incidents and drive automation, so at least one of device, mailbox or user must be supplied. Each value must be a column present in the query results. Maps to `detectionAction.alertTemplate.impactedAssets`.",
+      "description": "Query columns identifying the affected assets. At least one of device, mailbox or user is required. Maps to `alertTemplate.impactedAssets`.",
       "anyOf": [
         {
           "required": [
@@ -159,7 +159,7 @@
     "actions": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Automated response actions taken on entities found by the query. These change endpoint, file and identity state — isolation, quarantine and account disablement are disruptive and hard to reverse at scale, so treat them as deployment policy that warrants review. Maps to `detectionAction.responseActions`.",
+      "description": "Automated response actions on entities found by the query. These change endpoint, file and identity state. Maps to `detectionAction.responseActions`.",
       "properties": {
         "devices": {
           "type": "object",
@@ -172,27 +172,27 @@
                 "Full",
                 "Selective"
               ],
-              "description": "Network-isolate the device. `Full` cuts off every application and service; `Selective` leaves a limited set reachable. Maps to `detectionAction.responseActions[isolateDeviceResponseAction]`."
+              "description": "Network-isolate the device. `Full` cuts off every application and service; `Selective` leaves a limited set reachable."
             },
             "collect_investigation_package": {
               "type": "boolean",
               "default": false,
-              "description": "Collect a forensic investigation package from the device. Maps to `detectionAction.responseActions[collectInvestigationPackageResponseAction]`."
+              "description": "Collect a forensic investigation package from the device."
             },
             "run_antivirus_scan": {
               "type": "boolean",
               "default": false,
-              "description": "Run a full Microsoft Defender Antivirus scan on the device. Maps to `detectionAction.responseActions[runAntivirusScanResponseAction]`."
+              "description": "Run a full Microsoft Defender Antivirus scan on the device."
             },
             "initiate_investigation": {
               "type": "boolean",
               "default": false,
-              "description": "Start an automated investigation of the device. Maps to `detectionAction.responseActions[initiateInvestigationResponseAction]`."
+              "description": "Start an automated investigation of the device."
             },
             "restrict_app_execution": {
               "type": "boolean",
               "default": false,
-              "description": "Restrict the device to running only Microsoft-signed binaries. Maps to `detectionAction.responseActions[restrictAppExecutionResponseAction]`."
+              "description": "Restrict the device to running only Microsoft-signed binaries."
             }
           }
         },
@@ -209,7 +209,7 @@
                 "identifier",
                 "groups"
               ],
-              "description": "Allow or block a file across managed devices. Maps to `detectionAction.responseActions[allow/blockFileResponseAction]`.",
+              "description": "Allow or block a file across managed devices.",
               "properties": {
                 "action": {
                   "type": "string",
@@ -268,7 +268,7 @@
                         "type": "string",
                         "minLength": 1
                       },
-                      "description": "Named device groups the action applies to. Maps to `detectionAction.responseActions[allow/blockFileResponseAction].deviceGroupNames`."
+                      "description": "Named device groups the action applies to."
                     }
                   }
                 }
@@ -280,7 +280,7 @@
                 "SHA1",
                 "InitiatingProcessSHA1"
               ],
-              "description": "Query column holding the hash of the file to stop and move to quarantine. Maps to `detectionAction.responseActions[stopAndQuarantineFileResponseAction]`."
+              "description": "Query column holding the hash of the file to stop and quarantine."
             }
           }
         },
@@ -297,7 +297,7 @@
                 "ServicePrincipalId",
                 "RecipientObjectId"
               ],
-              "description": "Query column identifying the user whose Entra ID risk level is raised to high, triggering high-risk identity protection policies."
+              "description": "Query column identifying the user whose Entra ID risk level is raised to high."
             },
             "disable_user": {
               "type": "string",
@@ -354,7 +354,7 @@
             "Specific"
           ],
           "default": "All",
-          "description": "`All` scopes to every device; `Specific` requires `device_groups`. Maps to `detectionAction.organizationalScope.scopeType`."
+          "description": "`All` scopes to every device; `Specific` requires `device_groups`. Maps to `organizationalScope.scopeType`."
         },
         "device_groups": {
           "type": "array",
@@ -369,7 +369,7 @@
     },
     "exclusions": {
       "type": "array",
-      "description": "Tuning exclusions appended to the deployed query in order, each documented with a reason. A per-endpoint exclusion is a separate deployment entry in UDLF, so there is no tenant field here.",
+      "description": "Tuning exclusions appended to the deployed query in order, each with a reason.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -403,7 +403,7 @@
     },
     "advanced": {
       "type": "object",
-      "description": "Escape hatch for MDE API properties this sub-schema does not model. Passed through verbatim, so keys must match the API exactly. Prefer a modelled field where one exists — anything here is unvalidated and invisible to tooling.",
+      "description": "Escape hatch for unmodelled MDE API properties. Passed through verbatim and unvalidated; prefer a modelled field.",
       "additionalProperties": {
         "type": [
           "string",

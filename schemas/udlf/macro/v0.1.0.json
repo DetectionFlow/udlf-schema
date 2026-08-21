@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://detectionflow.com/schemas/udlf/macro/v0.1.0.json",
   "title": "UDLF Macro Schema v0.1.0",
-  "description": "Universal Detection Lifecycle Format (UDLF) macro schema. A macro is a named, reusable snippet of query logic that a detection references by name via its 'requires' block. Each document holds exactly one language, because a macro is not portable: the three platforms that support the primitive at all express it differently (a Splunk macros.conf stanza expanded as text, a Sentinel savedSearches function with a functionAlias, a LogScale saved query invoked as $\"name\"()). A KQL equivalent of an SPL macro is therefore a separate document reusing the same 'name'; a deployer resolves a detection's requirement on (name, language). Platforms with no macro primitive (Elastic, Google SecOps, Cortex XSIAM, SentinelOne) are absent from the language enum by design — a macro that could never be materialised should not be authorable. A Splunk tuning filter is not a special case; it is an ordinary macro with an spl definition.",
+  "description": "UDLF macro schema. A named, reusable snippet of query logic referenced from a detection's 'requires'. One language per document.",
   "type": "object",
   "required": ["id", "name", "title", "metadata", "language", "definition"],
   "additionalProperties": false,
@@ -10,12 +10,12 @@
     "id": {
       "type": "string",
       "format": "uuid",
-      "description": "Unique identifier for this macro document (UUID v4). Each language variant is its own document with its own id, so a detection's 'requires' entry names the macro rather than pinning an id."
+      "description": "Unique identifier for this macro document (UUID v4)."
     },
     "name": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9_]{2,63}$",
-      "description": "The token the macro is referenced by, both in detection logic and in a detection's 'requires' block (e.g. 'security_content_summariesonly'). Shared across the language variants of the same logical macro. The pattern is the safe intersection of all three targets — Sentinel requires a valid KQL identifier for functionAlias, which is stricter than Splunk's macro naming."
+      "description": "The token this macro is referenced by, e.g. 'security_content_summariesonly'. Shared across language variants."
     },
     "title": {
       "type": "string",
@@ -53,11 +53,11 @@
     "language": {
       "type": "string",
       "enum": ["spl", "kql", "cql"],
-      "description": "Query language of this macro, and by extension the family of platforms it can be deployed to: 'spl' -> Splunk (macros.conf stanza), 'kql' -> Microsoft Sentinel (savedSearches with a functionAlias), 'cql' -> CrowdStrike NG-SIEM / Falcon LogScale (saved query called as $\"name\"()). Closed to these three because no other supported platform has a macro primitive."
+      "description": "Query language of this macro. Closed to spl, kql and cql, the only platforms with a macro feature."
     },
     "arguments": {
       "type": "array",
-      "description": "Ordered parameter list, if this is a parameterised macro. Omit entirely for a zero-argument macro — for Splunk the count is load-bearing rather than cosmetic, since arity is encoded in the stanza name ('[name(2)]' and '[name]' are different macros). Substitution is positional, and the argument names must match the tokens used in 'definition' ($name$ for spl, a bare identifier for kql, ?name for cql).",
+      "description": "Ordered parameter list for a parameterised macro. Omit for a zero-argument macro; for spl the count is part of the name.",
       "items": {
         "type": "object",
         "required": ["name"],
@@ -81,11 +81,11 @@
               "dynamic",
               "guid"
             ],
-            "description": "Scalar type of the parameter. Required for 'kql' and forbidden elsewhere: a Sentinel function declares a typed signature ('functionParameters: argSpan: timespan') and cannot be created without it, whereas Splunk and LogScale parameters are untyped."
+            "description": "Scalar type of the parameter. Required for 'kql', forbidden elsewhere."
           },
           "default": {
             "type": ["string", "number", "boolean"],
-            "description": "Default value used when the caller omits this argument. Constrained to a scalar because neither target can express a composite one: a Sentinel function default must be a scalar literal, and LogScale's ?{name=default} form substitutes text. Forbidden for 'spl' (Splunk macros have no defaults). For 'kql' the value also cannot be a computed expression such as ago(20d), which the schema cannot detect, and defaulted parameters must come after non-defaulted ones — scripts/validate-macros.py enforces that ordering."
+            "description": "Default value when the caller omits this argument. Scalar only. Forbidden for 'spl'."
           }
         }
       }
@@ -93,7 +93,7 @@
     "definition": {
       "type": "string",
       "minLength": 1,
-      "description": "The macro body — the raw query text the macro expands to or evaluates as. Deploy-neutral: it carries logic only, never the surrounding platform object's mechanics (Sentinel's savedSearches 'category', the LogScale repository or view, app or index placement). Those are the deployer's concern, for the same reason a detection's schedule lives in 'deployments[].config' rather than in its logic."
+      "description": "The macro body: the raw query text it expands to. Logic only, no platform mechanics."
     },
     "references": {
       "type": "array",
@@ -102,7 +102,7 @@
     },
     "changelog": {
       "type": "array",
-      "description": "Append-only, chronological record of notable changes. Placed last as it grows unbounded. Replaces a separate 'updated_at' — the most recent entry's date is the effective last-updated date, and each entry's 'version' ties a change to the release it shipped in.",
+      "description": "Append-only history of notable changes. The most recent entry's date is the effective last-updated date.",
       "items": {
         "type": "object",
         "required": ["date", "version", "author", "summary"],

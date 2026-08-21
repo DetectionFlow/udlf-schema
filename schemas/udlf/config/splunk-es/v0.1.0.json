@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://detectionflow.com/schemas/udlf/config/splunk-es/v0.1.0.json",
   "title": "UDLF deployment config — Splunk Enterprise Security",
-  "description": "Optional, opt-in sub-schema for the `config` block of a UDLF deployment whose `platform` is `splunk-es`. Same delivery path as `splunk` — a custom app built and uploaded by the deployer — plus the Enterprise Security features that produce notable events and risk-based alerting. This schema is NOT referenced by the UDLF core schema; the core schema leaves `config` free-form. Apply this file separately when you want the block validated. It is intentionally self-contained rather than composed from the `splunk` sub-schema: each platform config versions independently, so ES may diverge from Splunk Enterprise without an inheritance break. Deployment mechanics and secrets are deliberately absent — they are resolved from the deployment's named endpoint. Analytic-story membership is also absent: in UDLF that relationship is expressed by a strategy (see the UDLF strategy schema) and derived at build time, not duplicated here.",
+  "description": "Config for `platform: splunk-es`. Splunk Enterprise Security via a deployer-built app: notable events and risk-based alerting.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -10,7 +10,7 @@
       "type": "string",
       "pattern": "^splunk-es::[0-9]+\\.[0-9]+\\.[0-9]+$",
       "default": "splunk-es::0.1.0",
-      "description": "Self-identifying sub-schema version for this config block. Lets the block declare which revision of the Splunk ES config shape it was authored against, so this sub-schema can version independently of UDLF core."
+      "description": "Sub-schema revision this block was authored against, e.g. `splunk-es::0.1.0`."
     },
     "severity": {
       "type": "string",
@@ -21,14 +21,14 @@
         "low",
         "informational"
       ],
-      "description": "Severity for this deployment. **Optional — omit it and the deployer uses `detection_context.severity`.** Set it only to override the detection's severity for this target. Always uses UDLF's own vocabulary, whatever the platform's native scale is, so an author never has to know the vendor spelling; the deployer translates. Maps to `action.notable.param.severity`, which takes these same five values in this same casing, so the mapping is exact.",
+      "description": "Severity for this deployment. Optional, overrides `detection_context.severity`. Maps to `action.notable.param.severity`.",
       "examples": [
         "high"
       ]
     },
     "schedule": {
       "type": "object",
-      "description": "When the saved search runs. Supply exactly one of `cron` or `frequency` — `frequency` is authoring sugar that the deployer expands into a cron expression.",
+      "description": "When the saved search runs. Supply exactly one of `cron` or `frequency`.",
       "additionalProperties": false,
       "oneOf": [
         {
@@ -45,7 +45,7 @@
       "properties": {
         "cron": {
           "type": "string",
-          "description": "Cron expression governing when the search runs. Maps to savedsearches.conf `cron_schedule`. The pattern is fully anchored — JSON Schema `pattern` searches for a substring by default, which would otherwise accept any string merely containing a cron-shaped fragment.",
+          "description": "Cron expression for the search. Maps to `cron_schedule`.",
           "pattern": "^((@(annually|yearly|monthly|weekly|daily|hourly|reboot))|(@every (\\d+(ns|us|ms|s|m|h))+)|((((\\d+,)+\\d+|([\\d\\*]+(\\/|-)\\d+)|\\d+|\\*) ?){5,7}))$",
           "examples": [
             "0 * * * *",
@@ -54,7 +54,7 @@
         },
         "frequency": {
           "type": "string",
-          "description": "Recurring interval, expanded to a cron expression by the deployer. Splunk supports 1-59m, 1-23h or 1-30d only — anything more complex must use `cron`. Zero is not a valid interval. Do not put a cron expression in this field.",
+          "description": "Recurring interval, expanded to cron by the deployer. Splunk allows 1-59m, 1-23h or 1-30d; use `cron` for anything else.",
           "pattern": "^(([1-9]|[1-5][0-9])m|([1-9]|1[0-9]|2[0-3])h|([1-9]|[1-2][0-9]|30)d)$",
           "examples": [
             "15m",
@@ -93,7 +93,7 @@
     },
     "suppression": {
       "type": "object",
-      "description": "Alert throttling — discard repeat alerts sharing the same values for `fields` within `window`. Maps to the savedsearches.conf `alert.suppress.*` keys. Distinct from `notable.nes_fields`, which suppresses at the notable-event layer inside ES.",
+      "description": "Alert throttling: discard repeat alerts sharing the same `fields` values within `window`. Maps to `alert.suppress.*`. Not `notable.nes_fields`.",
       "additionalProperties": false,
       "required": [
         "fields",
@@ -103,12 +103,12 @@
         "fields": {
           "type": "array",
           "minItems": 1,
-          "description": "Fields whose matching values identify a duplicate alert. Each must be produced by the search. Maps to `alert.suppress.fields`.",
+          "description": "Fields whose matching values identify a duplicate alert. Each must be produced by the search.",
           "items": {
             "type": "string",
             "minLength": 1,
             "pattern": "^[^ ]+$",
-            "description": "A field name. Spaces are not supported — the conf value is comma-delimited and unquoted."
+            "description": "A field name. No spaces: the conf value is comma-delimited and unquoted."
           }
         },
         "window": {
@@ -127,7 +127,7 @@
       "type": "integer",
       "minimum": 0,
       "default": 0,
-      "description": "Number of events that must be exceeded within the search window before the alert fires. 0 means fire on any result.",
+      "description": "Events that must be exceeded within the search window before the alert fires. 0 fires on any result.",
       "examples": [
         0,
         10
@@ -135,13 +135,13 @@
     },
     "notable": {
       "type": "object",
-      "description": "Notable-event configuration, emitted as the `action.notable.*` conf keys. Relevant when the deployment's `mode` is `alert`; a `monitoring` deployment normally omits this and carries `rba` only. Note there is no `severity` here: ES's notable severity vocabulary is exactly UDLF's (`critical`/`high`/`medium`/`low`/`informational`, same casing), so `detection_context.severity` maps straight onto `action.notable.param.severity` and the deployer applies it. On import, read that conf key back into `detection_context.severity` rather than into this block.",
+      "description": "Notable-event config, emitted as `action.notable.*`. Presence of this block is what makes the deployment alerting.",
       "additionalProperties": false,
       "properties": {
         "rule_title": {
           "type": "string",
           "minLength": 1,
-          "description": "Notable event title. Supports `$field$` token substitution from the search results. Maps to `action.notable.param.rule_title`.",
+          "description": "Notable event title. Supports `$field$` substitution. Maps to `action.notable.param.rule_title`.",
           "examples": [
             "New abnormal credential added to Azure AD by $user$"
           ]
@@ -149,11 +149,11 @@
         "rule_description": {
           "type": "string",
           "minLength": 1,
-          "description": "Notable event description. Supports `$field$` token substitution. Maps to `action.notable.param.rule_description`."
+          "description": "Notable event description. Supports `$field$` substitution. Maps to `action.notable.param.rule_description`."
         },
         "nes_fields": {
           "type": "array",
-          "description": "Notable Event Suppression fields — the fields ES offers analysts when creating a suppression from this notable. Maps to `action.notable.param.nes_fields`. Not the same as `suppression.fields`, which throttles the saved search itself.",
+          "description": "Notable Event Suppression fields ES offers analysts. Maps to `action.notable.param.nes_fields`. Not `suppression.fields`.",
           "items": {
             "type": "string",
             "minLength": 1
@@ -184,7 +184,7 @@
     },
     "rba": {
       "type": "object",
-      "description": "Risk-Based Alerting. Attributes a risk score to one or more entities so ES can aggregate risk over time and fire risk incident rules. Emitted as `action.risk.param._risk`. A `monitoring` deployment typically carries `rba` without `notable` — it contributes risk without raising an alert.",
+      "description": "Risk-Based Alerting. Scores entities so ES can aggregate risk over time. Emitted as `action.risk.param._risk`. `rba` without `notable` contributes risk without alerting.",
       "additionalProperties": false,
       "required": [
         "message"
@@ -205,7 +205,7 @@
         "message": {
           "type": "string",
           "minLength": 1,
-          "description": "Human-readable description of the risk activity. Supports `$field$` token substitution from the search results. Maps to `action.risk.param._risk_message`.",
+          "description": "Risk message for the detection. Supports `$field$` substitution. Maps to `action.risk.param._risk_message`.",
           "examples": [
             "Suspicious activity to $domain$ from $user$"
           ]
@@ -213,7 +213,7 @@
         "risk_objects": {
           "type": "array",
           "minItems": 1,
-          "description": "Entities that accrue risk from this detection. Note that `score` is per risk object, not per detection — ES scores each entity independently.",
+          "description": "Entities that accrue risk. `score` is per risk object, not per detection.",
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -241,14 +241,14 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 100000,
-                "description": "Risk contributed to this object each time the detection fires, before risk factors are applied. Maps to `risk_score`. ES accepts 0, so it validates here, but a 0 contributes no risk at all and is almost always a misconfiguration rather than an intent. Note contentctl enforces a 1-100 range, so a detection also deployed via `splunk-contentctl-v5-6` has a narrower valid range than this."
+                "description": "Risk contributed each time the detection fires, before risk factors. Maps to `risk_score`. contentctl narrows this to 1-100."
               }
             }
           }
         },
         "threat_objects": {
           "type": "array",
-          "description": "Indicators associated with the risk event — tracked across risk objects rather than scored themselves.",
+          "description": "Indicators associated with the risk event. Tracked across risk objects rather than scored.",
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -264,7 +264,7 @@
               },
               "type": {
                 "type": "string",
-                "description": "Category of the threat object. Maps to `threat_object_type`.\n\nSplunk ES does not constrain this value — it is stored as a free string on the risk event — so the enum here is a typo guard over the vocabularies that actually occur, not a platform rule. Two conventions are in circulation and this accepts both:\n\n- The **Splunk RBA community list** (https://splunk.github.io/rba/searches/threat_object_types/), e.g. `ip`, `process_name`, `url_domain`, `ssl_serial`. Prefer these when authoring new content — they are what the published RBA searches and dashboards group on.\n- **contentctl's list**, e.g. `ip_address`, `process`, `domain`, `certificate_serial`. contentctl writes these verbatim into savedsearches.conf, so any ES instance running an ESCU or contentctl-built app contains them — around a third of ESCU threat objects use a spelling absent from the RBA list. Importers must accept them, and must not rewrite them: the same detection's `splunk-contentctl-v5-6` deployment requires the contentctl spelling.\n\nNear-equivalents across the two, for anyone normalising downstream: `ip_address`/`ip`, `domain`/`url_domain`, `email_subject`/`subject`, `tls_hash`/`ja3_hash`, `certificate_*`/`ssl_*`. Three contentctl values have no RBA counterpart — `process` and `signature` have no equivalent at all, and `system` is a risk-object type used as a threat object. Do not translate blindly.\n\nUse `other` for anything genuinely outside both lists.",
+                "description": "Category of the threat object. Maps to `threat_object_type`. Accepts both the Splunk RBA list (`ip`) and contentctl's (`ip_address`). Do not rewrite between them.",
                 "enum": [
                   "app",
                   "ssid",
@@ -336,7 +336,7 @@
     },
     "drilldown_searches": {
       "type": "array",
-      "description": "Secondary searches surfaced alongside the notable to speed up triage. Emitted as `action.notable.param.drilldown_*`.",
+      "description": "Secondary searches surfaced alongside the notable for triage. Emitted as `action.notable.param.drilldown_*`.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -360,7 +360,7 @@
               "string",
               "null"
             ],
-            "description": "Start of the drilldown's search window. Commonly `$info_min_time$` — the notable's own window start.",
+            "description": "Start of the drilldown's search window. Commonly `$info_min_time$`, the notable's own window start.",
             "examples": [
               "$info_min_time$"
             ]
@@ -380,7 +380,7 @@
     },
     "advanced": {
       "type": "object",
-      "description": "Escape hatch for raw savedsearches.conf keys this sub-schema does not model. Keys and values are passed through verbatim, so they must be spelled exactly as Splunk expects. Prefer a modelled field where one exists — anything placed here is unvalidated and invisible to tooling.",
+      "description": "Escape hatch for unmodelled savedsearches.conf keys. Passed through verbatim and unvalidated; prefer a modelled field.",
       "additionalProperties": {
         "type": [
           "string",
