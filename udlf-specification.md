@@ -85,7 +85,7 @@ Platforms express this differently, and one inverts the default:
 | platform | `enabled: true` | `enabled: false` |
 |---|---|---|
 | `splunk`, `splunk-es` | `disabled = 0` in `savedsearches.conf` | `disabled = 1` |
-| `splunk-contentctl-v5-6` | `enabled_by_default: true`. contentctl permits it only for production TTP/Anomaly/Correlation | `enabled_by_default: false` |
+| `splunk-contentctl-v5-6` | `enabled_by_default: true`. contentctl permits it only for production TTP/Anomaly/Correlation, so a deployer emits `false` below `lifecycle: live` | `enabled_by_default: false` |
 | `splunk-contentctl-ng` | ship the pack, then enable post-install. ESCU 6.x has no such field | the pack default, so the deployer does nothing |
 | `sentinel`, `crowdstrike`, `sentinel-one`, `defender-for-endpoint` | rule enabled | rule created, disabled |
 
@@ -101,7 +101,7 @@ per platform and no logic:
 | `splunk-es` | `config.notable` is present |
 | `splunk-contentctl-v5-6` | `config.type` is `TTP` or `Correlation` |
 | `splunk-contentctl-ng` | `config.finding` is present (equivalently `config.type` is `TTP` or `Correlation`) |
-| `sentinel` | `config.alert.create_incident` is not `false`. Absent means it alerts |
+| `sentinel` | always, while enabled. A scheduled analytics rule raises an alert on every match |
 | `defender-for-endpoint` | always. MDE custom detection rules cannot be non-alerting |
 | `crowdstrike` | always. `details.outcome` picks Detection or Incident, and both alert |
 | `sentinel-one` | always |
@@ -111,6 +111,12 @@ per platform and no logic:
 
 The last two rows have no default on purpose. Guessing "alerting" over-reports SOC load, and
 guessing "not" under-reports coverage. Report them as unknown rather than picking one.
+
+One trap worth naming, because it looks like a non-alerting switch and is not.
+`sentinel.alert.create_incident: false` stops incidents being opened from the alerts a rule raises.
+The rule still raises them, and they still land in the alerts table. It reduces incident noise, so
+it is worth setting, but a consumer that reads it as non-alerting will undercount Sentinel alerts.
+Sentinel has no non-alerting state; `enabled: false` is the only way to stop it.
 
 For `splunk-es` the rule is **normative**, not a heuristic. A deployment carrying `notable` raises
 a notable event. One without it does not alert, and contributes risk through `rba` only. Omitting
@@ -1023,7 +1029,7 @@ where alerting is declared. `v0.2.2` stays served, so existing files keep valida
 | v0.2.2 | v0.3.0 |
 |---|---|
 | `mode: alert` | nothing. The platform's `config` already says it alerts (`notable` on `splunk-es`, `type: TTP` on contentctl). See [does this deployment alert?](#does-this-deployment-alert) |
-| `mode: monitoring` | nothing on a modelled platform, where the config says it (`rba` without `notable`, `type: Anomaly`, `alert.create_incident: false`). On the target-agnostic `udlf` platform, `config.mode: monitoring`. |
+| `mode: monitoring` | nothing on a modelled platform, where the config says it (`rba` without `notable`, `type: Anomaly`). Platforms with no non-alerting state, Sentinel and the three EDRs, use `enabled: false`. On the target-agnostic `udlf` platform, `config.mode: monitoring`. |
 | `mode: disabled` | `enabled: false`, which unlike `mode: disabled` no longer erases whether the deployment was alerting. |
 | `mode: warranty` | nothing. Validation against curated data is `tests[]`, which already records the data, the framework and the expected result. Maturity is `lifecycle`. A live-but-sinkholed deployment is a non-alerting platform config. |
 | `mode` was required | `platform` is the only required field on a deployment. |

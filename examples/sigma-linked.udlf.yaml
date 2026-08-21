@@ -5,7 +5,7 @@ lifecycle: live
 
 metadata:
   created_at: "2024-06-01"
-  version: "1.0.0"
+  version: "1.1.0"
   authors:
     - Detection Engineering Team
 

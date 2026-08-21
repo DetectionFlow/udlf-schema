@@ -13,7 +13,7 @@ lifecycle: testing
 
 metadata:
   created_at: "2026-06-10"
-  version: "0.5.0"
+  version: "0.6.0"
   authors:
     - Alex Rivera
     - Detection Engineering Team
@@ -221,9 +221,9 @@ deployments:
     config:
       schema: sentinel::0.1.0
       alert:
-        # Runs on live data and raises alerts into the table, but opens no
-        # incident, so nothing reaches the SOC queue. On sentinel this is how a
-        # deployment says it does not alert.
+        # Still alerts: sentinel has no non-alerting state. This only stops an
+        # incident being opened per alert, keeping the queue quiet while the
+        # deployment is at `testing`.
         create_incident: false
 
   # Target-agnostic. `platform: udlf` names no product and selects
