@@ -11,6 +11,10 @@ A deployment whose platform has no sub-schema is skipped, not failed — that is
 the escape hatch working as intended. Pass --strict to fail on skips instead,
 which is what you want in a repo where every platform in use is modelled.
 
+It also runs the cross-field checks the core schema cannot express, because they
+span the deployment and its config, or depend on a value inherited from the
+top level that a `deployments[]` subschema cannot see.
+
     ./scripts/validate-config.py examples/*.udlf.yaml
     ./scripts/validate-config.py --strict examples/**/*.udlf.yaml
 """
@@ -25,7 +29,9 @@ import sys
 import jsonschema
 import yaml
 
-SCHEMA_DIR = pathlib.Path(__file__).resolve().parent.parent / "schemas" / "udlf" / "config"
+SCHEMA_DIR = (
+    pathlib.Path(__file__).resolve().parent.parent / "schemas" / "udlf" / "config"
+)
 
 
 def sub_schema_for(platform: str, declared: object) -> pathlib.Path | None:
@@ -57,6 +63,48 @@ def sub_schema_for(platform: str, declared: object) -> pathlib.Path | None:
     return versions[-1] if versions else None
 
 
+def cross_checks(doc: dict, dep: dict) -> list[str]:
+    """Rules spanning the deployment, its config, and inherited top-level values.
+
+    The core schema catches `lifecycle: decommissioned` alongside `enabled: true`
+    only when the deployment states its own lifecycle, since a `deployments[]`
+    subschema cannot see the top-level value it would otherwise inherit. And no
+    JSON Schema can reach from `enabled` into the sibling `config`, which is
+    where contentctl's own constraint on `enabled_by_default` lives.
+    """
+    problems = []
+    config = dep.get("config") or {}
+
+    lifecycle = dep.get("lifecycle", doc.get("lifecycle"))
+    if lifecycle == "decommissioned" and dep.get("enabled") is True:
+        source = "its own" if "lifecycle" in dep else "the inherited top-level"
+        problems.append(
+            f"enabled: true conflicts with {source} lifecycle: decommissioned, "
+            f"a retired deployment is removed, not shipped switched on"
+        )
+
+    if dep.get("platform") == "splunk-contentctl-v5-6" and dep.get("enabled") is True:
+        # contentctl permits enabled_by_default only for *production* TTP, Anomaly
+        # and Correlation. UDLF `lifecycle: live` is what maps onto production, so
+        # an explicit `enabled: true` anywhere else cannot be honoured. Only the
+        # explicit value is checked: where `enabled` is omitted the deployer clamps
+        # the default to false below `live`, which is not an authoring error.
+        if config.get("type") == "Hunting":
+            problems.append(
+                "enabled: true cannot be honoured on a Hunting detection, because "
+                "contentctl permits enabled_by_default only for production TTP, "
+                "Anomaly and Correlation"
+            )
+        elif lifecycle != "live":
+            problems.append(
+                f"enabled: true cannot be honoured at lifecycle: {lifecycle}, because "
+                f"contentctl permits enabled_by_default only for production detections "
+                f"(UDLF lifecycle: live)"
+            )
+
+    return problems
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("files", nargs="+", type=pathlib.Path)
@@ -67,46 +115,61 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    checked = failed = skipped = 0
+    checked = failed = skipped = conflicts = 0
 
     for path in args.files:
         doc = yaml.safe_load(path.read_text()) or {}
         for i, dep in enumerate(doc.get("deployments") or []):
-            config = dep.get("config")
-            if config is None:
-                continue
-
             platform = dep.get("platform", "<missing>")
             where = f"{path}: deployments[{i}] ({platform})"
-            schema_file = sub_schema_for(platform, config.get("schema"))
 
-            if schema_file is None:
+            # Cross-field checks run on every deployment, config or not. They are
+            # collected rather than printed, so each deployment gets one verdict.
+            problems = cross_checks(doc, dep)
+            conflicts += len(problems)
+
+            config = dep.get("config")
+            schema_file = (
+                sub_schema_for(platform, config.get("schema"))
+                if config is not None
+                else None
+            )
+
+            if config is not None and schema_file is None:
                 skipped += 1
                 level = "FAIL" if args.strict else "skip"
                 print(f"{level} {where}: no sub-schema under {SCHEMA_DIR}")
-                continue
+            elif schema_file is not None:
+                checked += 1
+                validator = jsonschema.Draft202012Validator(
+                    json.loads(schema_file.read_text())
+                )
+                errors = sorted(
+                    validator.iter_errors(config), key=lambda e: list(e.path)
+                )
+                if errors:
+                    failed += 1
+                    problems.extend(
+                        f"{'/'.join(str(q) for q in err.path) or '<root>'}: "
+                        f"{err.message}"
+                        for err in errors
+                    )
 
-            checked += 1
-            validator = jsonschema.Draft202012Validator(
-                json.loads(schema_file.read_text())
-            )
-            errors = sorted(validator.iter_errors(config), key=lambda e: list(e.path))
-            if not errors:
+            if problems:
+                print(f"FAIL {where}")
+                for problem in problems:
+                    print(f"       {problem}")
+            elif schema_file is not None:
                 print(f"ok   {where}")
-                continue
-
-            failed += 1
-            print(f"FAIL {where}")
-            for err in errors:
-                loc = "/".join(str(p) for p in err.path) or "<root>"
-                print(f"       {loc}: {err.message}")
 
     summary = f"\n{checked} config block(s) checked, {failed} failed"
     if skipped:
         summary += f", {skipped} skipped"
+    if conflicts:
+        summary += f", {conflicts} cross-field conflict(s)"
     print(summary)
 
-    return 1 if failed or (args.strict and skipped) else 0
+    return 1 if failed or conflicts or (args.strict and skipped) else 0
 
 
 if __name__ == "__main__":

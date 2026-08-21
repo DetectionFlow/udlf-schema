@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://detectionflow.com/schemas/udlf/config/sentinel-one/v0.1.0.json",
   "title": "UDLF deployment config — SentinelOne STAR Rules",
-  "description": "Optional, opt-in sub-schema for the `config` block of a UDLF deployment whose `platform` is `sentinel-one`. Covers SentinelOne STAR rules. This is not a scheduled-search platform: STAR rules evaluate continuously, so there is no schedule block, and a rule may carry active-response actions that quarantine an endpoint. The fields UDLF already owns are absent — maturity and runtime behaviour come from `lifecycle` and `mode`, authorship from `metadata.authors`, and each target tenant is its own deployment entry — as are vendor-assigned rule ids, because UDLF is desired-state only. For a `Single Event` rule the S1QL query lives in `detection_content` like any other language. For a `Correlation` rule the subqueries stay here, because they are structural parts of the rule definition rather than one logic blob — the one place logic legitimately leaks into `config`, pending the correlation-primitive decision in the v0.3.0 roadmap. This schema is NOT referenced by the UDLF core schema; apply it separately when you want the block validated.",
+  "description": "Config for `platform: sentinel-one`. STAR rules evaluate continuously, so there is no schedule. A Single Event query lives in `detection_content`; correlation subqueries live here.",
   "type": "object",
   "additionalProperties": false,
   "allOf": [
@@ -112,7 +112,7 @@
       "type": "string",
       "pattern": "^sentinel-one::[0-9]+\\.[0-9]+\\.[0-9]+$",
       "default": "sentinel-one::0.1.0",
-      "description": "Self-identifying sub-schema version for this config block, so this file can version independently of UDLF core."
+      "description": "Sub-schema revision this block was authored against, e.g. `sentinel-one::0.1.0`."
     },
     "severity": {
       "type": "string",
@@ -123,7 +123,7 @@
         "low",
         "informational"
       ],
-      "description": "Severity for this deployment. **Optional — omit it and the deployer uses `detection_context.severity`.** Set it only to override the detection's severity for this target. Always uses UDLF's own vocabulary, whatever the platform's native scale is, so an author never has to know the vendor spelling; the deployer translates. SentinelOne has no `Informational`, so the deployer collapses `informational` to `Low` — set this explicitly if you want a different collapse.",
+      "description": "Severity for this deployment. Optional, overrides `detection_context.severity`. SentinelOne has no `Informational`.",
       "examples": [
         "high"
       ]
@@ -131,7 +131,7 @@
     "details": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Optional overrides for how the rule presents in SentinelOne. Omit any field to let the deployer take it from the detection.",
+      "description": "Overrides for how the rule presents in SentinelOne. Omit a field to take it from the detection.",
       "properties": {
         "name": {
           "type": "string",
@@ -146,7 +146,7 @@
         "expiration": {
           "type": "string",
           "pattern": "^\\d{4}-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])$",
-          "description": "Expiry date as YYYY-MM-DD, at most six months out from deployment. Rules are Permanent until this is set, at which point SentinelOne treats them as Temporary. Useful for time-boxed campaign or incident rules.",
+          "description": "Expiry date (YYYY-MM-DD), at most six months out. Unset means the rule is Permanent.",
           "examples": [
             "2026-12-31"
           ]
@@ -159,7 +159,7 @@
       "required": [
         "type"
       ],
-      "description": "What the rule matches on. Note that SentinelOne cannot change a rule's condition type after deployment — switching means deleting the rule and deploying a new one, which also means clearing any deployer-held rule id.",
+      "description": "What the rule matches on. SentinelOne cannot change a rule's condition type after deployment.",
       "properties": {
         "type": {
           "type": "string",
@@ -167,7 +167,7 @@
             "Single Event",
             "Correlation"
           ],
-          "description": "`Single Event` alerts on each match of a single query, whose S1QL lives in `detection_content`. `Correlation` groups multiple subqueries around a shared entity over a time window, defined in `correlation` below."
+          "description": "`Single Event` matches one query, whose S1QL lives in `detection_content`. `Correlation` groups subqueries defined in `correlation`."
         },
         "correlation": {
           "type": "object",
@@ -190,7 +190,7 @@
                 "Storyline",
                 "None"
               ],
-              "description": "Entity that groups matching events. Each maps to a fixed field set: Process = agent.uuid AND src.process.uid; User = any of actor.user.name, src/tgt.process.user, event.login.userName; Ip = any of src/dst endpoint and process ip fields; Endpoint = agent.uuid OR device.uid; Storyline = src.process.storyline.id AND agent.uuid. Only `Process` permits active response actions."
+              "description": "Entity that groups matching events; each maps to a fixed field set. Only `Process` permits active response actions."
             },
             "match_in_order": {
               "type": "boolean",
@@ -212,7 +212,7 @@
             "sub_queries": {
               "type": "array",
               "minItems": 1,
-              "description": "Ordered subqueries making up the correlation. These are rule structure rather than a single logic blob, which is why they live here rather than in `detection_content`.",
+              "description": "Ordered subqueries making up the correlation. Rule structure, which is why they live here rather than in `detection_content`.",
               "items": {
                 "type": "object",
                 "additionalProperties": false,
@@ -240,7 +240,7 @@
         "cool_off": {
           "type": "string",
           "pattern": "^(([1-9][0-9]{0,2}m|1[0-3][0-9]{2}m|14[0-3][0-9]m|1440m)|([1-9]h|1[0-9]h|2[0-4]h))$",
-          "description": "Suppress repeat alerts for this period after the rule fires, from 1m to 1440m or 1h to 24h. Note that mitigation actions set in `response` are NOT applied to suppressed alerts — a long cool-off silently disables response for the duration.",
+          "description": "Suppress repeat alerts for this period after firing, 1m-1440m or 1h-24h. `response` actions do not apply to suppressed alerts.",
           "examples": [
             "30m",
             "4h"
@@ -255,7 +255,7 @@
         "treat_as_threat",
         "network_quarantine"
       ],
-      "description": "Storyline Active Response actions taken when the rule matches. Permitted only on Single Event rules and Process-entity correlations. These actions change endpoint state, so a deployment carrying them is doing more than detecting — consider whether the UDLF deployment `mode` still reflects reality.",
+      "description": "Storyline Active Response actions. Single Event rules and Process-entity correlations only. These change endpoint state.",
       "properties": {
         "treat_as_threat": {
           "type": [
@@ -268,18 +268,18 @@
             "Malicious"
           ],
           "default": false,
-          "description": "Promote the alert to a threat and apply the matching threat policy. `false` leaves it as an alert; `Suspicious` and `Malicious` select the respective policy."
+          "description": "Promote the alert to a threat and apply the matching policy. `false` leaves it an alert."
         },
         "network_quarantine": {
           "type": "boolean",
           "default": false,
-          "description": "Automatically network-quarantine the alerting endpoint. Reconnection is manual, from the Sentinels page or Endpoint Details."
+          "description": "Automatically network-quarantine the alerting endpoint. Reconnection is manual."
         }
       }
     },
     "advanced": {
       "type": "object",
-      "description": "Escape hatch for SentinelOne API properties this sub-schema does not model. Passed through verbatim, so keys must match the API exactly. Prefer a modelled field where one exists — anything here is unvalidated and invisible to tooling.",
+      "description": "Escape hatch for unmodelled SentinelOne API properties. Passed through verbatim and unvalidated; prefer a modelled field.",
       "additionalProperties": {
         "type": [
           "string",

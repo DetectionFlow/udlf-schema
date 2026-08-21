@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://detectionflow.com/schemas/udlf/strategy/v0.2.0.json",
   "title": "UDLF Strategy Schema v0.2.0",
-  "description": "Universal Detection Lifecycle Format (UDLF) strategy schema. A strategy is an analytic-story-style grouping that references multiple detections by id and carries a narrative describing the threat it addresses (e.g. \"Scattered Spider Coverage\", \"Entra ID\").",
+  "description": "UDLF strategy schema. An analytic-story-style grouping that references detections by id under a shared narrative.",
   "type": "object",
   "required": ["id", "title", "metadata"],
   "additionalProperties": false,
@@ -149,7 +149,7 @@
     },
     "changelog": {
       "type": "array",
-      "description": "Append-only, chronological record of notable changes. Placed last as it grows unbounded. Replaces a separate 'updated_at' — the most recent entry's date is the effective last-updated date, and each entry's 'version' ties a change to the release it shipped in.",
+      "description": "Append-only history of notable changes. The most recent entry's date is the effective last-updated date.",
       "items": {
         "type": "object",
         "required": ["date", "version", "author", "summary"],

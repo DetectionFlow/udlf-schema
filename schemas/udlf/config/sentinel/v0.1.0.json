@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://detectionflow.com/schemas/udlf/config/sentinel/v0.1.0.json",
   "title": "UDLF deployment config — Microsoft Sentinel",
-  "description": "Optional, opt-in sub-schema for the `config` block of a UDLF deployment whose `platform` is `sentinel`. Covers Microsoft Sentinel analytics rules: schedule, trigger, alert presentation, incident grouping and entity mappings. The KQL query is not here — it lives in `detection_content` like any other language variant. Neither are the fields UDLF already owns: maturity and runtime behaviour come from `lifecycle` and `mode`, authorship from `metadata.authors`, and each target workspace is its own deployment entry rather than a tenant list. Vendor-assigned rule ids are absent too, because UDLF is desired-state only — reconciling against what is actually deployed is the deployer's job. ATT&CK techniques come from the top-level `threat` block, but `alert.tactics` is modelled here because Sentinel spells its tactics its own way (`CommandAndControl`). Every field notes the Sentinel API property it maps to. This schema is NOT referenced by the UDLF core schema; apply it separately when you want the block validated.",
+  "description": "Config for `platform: sentinel`. Sentinel analytics rules: schedule, trigger, alert, incident grouping and entity mappings. Query lives in `detection_content`.",
   "type": "object",
   "additionalProperties": false,
   "allOf": [
@@ -68,7 +68,7 @@
         "low",
         "informational"
       ],
-      "description": "Severity for this deployment. **Optional — omit it and the deployer uses `detection_context.severity`.** Set it only to override the detection's severity for this target. Always uses UDLF's own vocabulary, whatever the platform's native scale is, so an author never has to know the vendor spelling; the deployer translates. Maps to `alertDetailsOverride`. Sentinel has no `Critical`, so the deployer collapses `critical` to `High` — set this explicitly if you want a different collapse.",
+      "description": "Severity for this deployment. Optional, overrides `detection_context.severity`. Sentinel has no `Critical`.",
       "examples": [
         "high"
       ]
@@ -80,7 +80,7 @@
         "uuid",
         "version"
       ],
-      "description": "Provenance of the Sentinel gallery template this rule was created from. Populating it lets Sentinel's UI track rules back to their template.",
+      "description": "Provenance of the Sentinel gallery template this rule came from. Lets the UI track rules back to their template.",
       "properties": {
         "uuid": {
           "type": "string",
@@ -102,12 +102,12 @@
         "nrt": {
           "type": "boolean",
           "default": false,
-          "description": "Run as a Near Real Time rule: fixed one-minute cadence over the preceding minute, alerting on first match. Note that Sentinel cannot convert a rule between NRT and scheduled — switching means deleting the rule and deploying a new one under a fresh id."
+          "description": "Run as a Near Real Time rule: one-minute cadence, alerting on first match. Sentinel cannot convert a rule between NRT and scheduled."
         },
         "frequency": {
           "type": "string",
           "pattern": "^((([1-9]|1[0-4])d)|(([1-9]|[1-9][0-9]|[1-2][0-9][0-9]|3[0-2][0-9]|33[0-7])h)|(([5-9]|[1-9][0-9]{1,3}|1[0-9]{4}|200[0-9]{2}|201[0-5][0-9]|20160)m))$",
-          "description": "How often the query runs, as `Nd`/`Nh`/`Nm`. Sentinel allows 5 minutes to 14 days — a one-minute cadence is not a scheduled rule, it is `nrt: true`. Maps to `queryFrequency`.",
+          "description": "How often the query runs, as `Nd`/`Nh`/`Nm`. Sentinel allows 5 minutes to 14 days. Maps to `queryFrequency`.",
           "examples": [
             "5m",
             "1h",
@@ -157,7 +157,7 @@
     "alert": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Alert presentation and incident behaviour. The title/description/severity fields override what Sentinel would otherwise derive from the detection, and support `{{columnName}}` substitution so one rule can raise differently-shaped alerts.",
+      "description": "Alert presentation and incident behaviour. Title, description and severity override the detection's and support `{{columnName}}` substitution.",
       "properties": {
         "create_incident": {
           "type": "boolean",
@@ -178,7 +178,7 @@
             }
           ],
           "default": false,
-          "description": "How long to wait after firing before the rule may fire again, from 5 minutes to 1 day. Use boolean `false` to disable suppression entirely — the string \"false\" is rejected so the two cannot be confused, and `true` is meaningless because there is no default duration. Maps to `suppressionDuration`.",
+          "description": "How long to wait after firing before the rule may fire again, 5 minutes to 1 day. Boolean `false` disables suppression. Maps to `suppressionDuration`.",
           "examples": [
             "1h",
             false
@@ -187,12 +187,12 @@
         "title": {
           "type": "string",
           "minLength": 1,
-          "description": "Alert display name, up to 256 characters with at most 3 `{{columnName}}` placeholders. Overrides the detection title. Maps to `alertDetailsOverride.alertDisplayNameFormat`."
+          "description": "Alert display name, up to 256 chars with at most 3 `{{columnName}}` placeholders. Overrides the detection title."
         },
         "description": {
           "type": "string",
           "minLength": 1,
-          "description": "Alert description, up to 5000 characters with at most 3 `{{columnName}}` placeholders. Overrides `detection_context.description`. Maps to `alertDetailsOverride.alertDescriptionFormat`."
+          "description": "Alert description, up to 5000 chars with at most 3 `{{columnName}}` placeholders. Overrides `detection_context.description`."
         },
         "tactics": {
           "type": "array",
@@ -218,7 +218,7 @@
               "ResourceDevelopment"
             ]
           },
-          "description": "ATT&CK tactics as Sentinel spells them — note `CommandAndControl` rather than the ATT&CK display form, plus ICS-only values. Kept here rather than derived from the top-level `threat` block because the vocabulary is Sentinel's own; a deployer may still generate it from `threat.attack` when omitted."
+          "description": "ATT&CK tactics as Sentinel spells them, e.g. `CommandAndControl`, plus ICS-only values. A deployer may generate these from `threat.attack`."
         },
         "custom_details": {
           "type": "array",
@@ -327,7 +327,7 @@
             "AlertPerResult"
           ],
           "default": "SingleAlert",
-          "description": "`SingleAlert` groups all query results into one alert; `AlertPerResult` raises one alert per result. Maps to `eventGroupingSettings.aggregationKind`."
+          "description": "`SingleAlert` groups all query results into one alert; `AlertPerResult` raises one per result."
         },
         "alert": {
           "type": "object",
@@ -335,7 +335,7 @@
           "required": [
             "enabled"
           ],
-          "description": "Group alerts from this rule into a single incident. Sentinel caps an incident at 150 alerts; beyond that it opens a new incident with the same details.",
+          "description": "Group alerts from this rule into a single incident. Sentinel caps an incident at 150 alerts.",
           "properties": {
             "enabled": {
               "type": "boolean",
@@ -362,7 +362,7 @@
                 "Selected"
               ],
               "default": "AllEntities",
-              "description": "`AllEntities` groups when every entity matches (recommended); `AnyAlert` groups everything this rule raises; `Selected` groups on the `group_by_*` lists below. Maps to `...groupingConfiguration.matchingMethod`."
+              "description": "`AllEntities` groups when every entity matches; `AnyAlert` groups everything this rule raises; `Selected` uses the `group_by_*` lists."
             },
             "group_by_entities": {
               "type": "array",
@@ -390,7 +390,7 @@
                   "URL"
                 ]
               },
-              "description": "Entity types to group on when `matching` is `Selected`. Only entities mapped by this rule may be used. Maps to `...groupingConfiguration.groupByEntities`."
+              "description": "Entity types to group on when `matching` is `Selected`. Only entities this rule maps may be used."
             },
             "group_by_alert_details": {
               "type": "array",
@@ -411,7 +411,7 @@
                 "type": "string",
                 "minLength": 1
               },
-              "description": "Custom detail keys to group on when `matching` is `Selected`. Only keys declared in `alert.custom_details` may be used. Maps to `...groupingConfiguration.groupByCustomDetails`."
+              "description": "Custom detail keys to group on when `matching` is `Selected`. Only keys declared in `alert.custom_details` may be used."
             }
           }
         }
@@ -421,7 +421,7 @@
       "type": "array",
       "minItems": 1,
       "maxItems": 10,
-      "description": "Entity mappings — how query columns become the accounts, hosts, IPs and so on that Sentinel builds investigation graphs and automation from. Each entity type accepts its own identifier set and requires at least one strong identifier. Maps to `entityMappings`.",
+      "description": "Entity mappings: how query columns become the accounts, hosts and IPs Sentinel builds investigation graphs from. Maps to `entityMappings`.",
       "items": {
         "oneOf": [
           {
@@ -439,7 +439,7 @@
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 3,
-                "description": "Field mappings for the Account entity. At least one must use a strong identifier (Sid, Name, FullName, AadUserId, PUID, ObjectGuid) — Sentinel cannot construct the entity otherwise.",
+                "description": "Field mappings for the Account entity. Needs at least one strong identifier: Sid, Name, FullName, AadUserId, PUID, ObjectGuid.",
                 "contains": {
                   "type": "object",
                   "properties": {
@@ -510,7 +510,7 @@
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 3,
-                "description": "Field mappings for the Host entity. At least one must use a strong identifier (HostName, FullName, NetBiosName, AzureID, OMSAgentID) — Sentinel cannot construct the entity otherwise.",
+                "description": "Field mappings for the Host entity. Needs at least one strong identifier: HostName, FullName, NetBiosName, AzureID, OMSAgentID.",
                 "contains": {
                   "type": "object",
                   "properties": {
@@ -577,7 +577,7 @@
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 2,
-                "description": "Field mappings for the IP entity. At least one must use a strong identifier (Address) — Sentinel cannot construct the entity otherwise.",
+                "description": "Field mappings for the IP entity. Needs at least one strong identifier: Address.",
                 "contains": {
                   "type": "object",
                   "properties": {
@@ -632,7 +632,7 @@
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 2,
-                "description": "Field mappings for the Malware entity. At least one must use a strong identifier (Name) — Sentinel cannot construct the entity otherwise.",
+                "description": "Field mappings for the Malware entity. Needs at least one strong identifier: Name.",
                 "contains": {
                   "type": "object",
                   "properties": {
@@ -687,7 +687,7 @@
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 2,
-                "description": "Field mappings for the File entity. At least one must use a strong identifier (Name) — Sentinel cannot construct the entity otherwise.",
+                "description": "Field mappings for the File entity. Needs at least one strong identifier: Name.",
                 "contains": {
                   "type": "object",
                   "properties": {
@@ -742,7 +742,7 @@
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 3,
-                "description": "Field mappings for the Process entity. At least one must use a strong identifier (CommandLine, ProcessId) — Sentinel cannot construct the entity otherwise.",
+                "description": "Field mappings for the Process entity. Needs at least one strong identifier: CommandLine, ProcessId.",
                 "contains": {
                   "type": "object",
                   "properties": {
@@ -800,7 +800,7 @@
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 3,
-                "description": "Field mappings for the CloudApplication entity. At least one must use a strong identifier (AppId, Name) — Sentinel cannot construct the entity otherwise.",
+                "description": "Field mappings for the CloudApplication entity. Needs at least one strong identifier: AppId, Name.",
                 "contains": {
                   "type": "object",
                   "properties": {
@@ -858,7 +858,7 @@
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 3,
-                "description": "Field mappings for the DNS entity. At least one must use a strong identifier (DomainName) — Sentinel cannot construct the entity otherwise.",
+                "description": "Field mappings for the DNS entity. Needs at least one strong identifier: DomainName.",
                 "contains": {
                   "type": "object",
                   "properties": {
@@ -912,7 +912,7 @@
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 3,
-                "description": "Field mappings for the AzureResource entity. At least one must use a strong identifier (ResourceId) — Sentinel cannot construct the entity otherwise.",
+                "description": "Field mappings for the AzureResource entity. Needs at least one strong identifier: ResourceId.",
                 "contains": {
                   "type": "object",
                   "properties": {
@@ -966,7 +966,7 @@
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 2,
-                "description": "Field mappings for the FileHash entity. At least one must use a strong identifier (Value) — Sentinel cannot construct the entity otherwise.",
+                "description": "Field mappings for the FileHash entity. Needs at least one strong identifier: Value.",
                 "contains": {
                   "type": "object",
                   "properties": {
@@ -1021,7 +1021,7 @@
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 2,
-                "description": "Field mappings for the RegistryKey entity. At least one must use a strong identifier (Hive, Key) — Sentinel cannot construct the entity otherwise.",
+                "description": "Field mappings for the RegistryKey entity. Needs at least one strong identifier: Hive, Key.",
                 "contains": {
                   "type": "object",
                   "properties": {
@@ -1077,7 +1077,7 @@
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 3,
-                "description": "Field mappings for the RegistryValue entity. At least one must use a strong identifier (Name) — Sentinel cannot construct the entity otherwise.",
+                "description": "Field mappings for the RegistryValue entity. Needs at least one strong identifier: Name.",
                 "contains": {
                   "type": "object",
                   "properties": {
@@ -1133,7 +1133,7 @@
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 3,
-                "description": "Field mappings for the SecurityGroup entity. At least one must use a strong identifier (DistinguishedName, SID, ObjectGuid) — Sentinel cannot construct the entity otherwise.",
+                "description": "Field mappings for the SecurityGroup entity. Needs at least one strong identifier: DistinguishedName, SID, ObjectGuid.",
                 "contains": {
                   "type": "object",
                   "properties": {
@@ -1191,7 +1191,7 @@
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 1,
-                "description": "Field mappings for the URL entity. At least one must use a strong identifier (Url) — Sentinel cannot construct the entity otherwise.",
+                "description": "Field mappings for the URL entity. Needs at least one strong identifier: Url.",
                 "contains": {
                   "type": "object",
                   "properties": {
@@ -1245,7 +1245,7 @@
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 3,
-                "description": "Field mappings for the Mailbox entity. At least one must use a strong identifier (MailboxPrimaryAddress) — Sentinel cannot construct the entity otherwise.",
+                "description": "Field mappings for the Mailbox entity. Needs at least one strong identifier: MailboxPrimaryAddress.",
                 "contains": {
                   "type": "object",
                   "properties": {
@@ -1303,7 +1303,7 @@
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 3,
-                "description": "Field mappings for the MailCluster entity. At least one must use a strong identifier (Query, Source) — Sentinel cannot construct the entity otherwise.",
+                "description": "Field mappings for the MailCluster entity. Needs at least one strong identifier: Query, Source.",
                 "contains": {
                   "type": "object",
                   "properties": {
@@ -1372,7 +1372,7 @@
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 3,
-                "description": "Field mappings for the MailMessage entity. At least one must use a strong identifier (NetworkMessageId, Recipient) — Sentinel cannot construct the entity otherwise.",
+                "description": "Field mappings for the MailMessage entity. Needs at least one strong identifier: NetworkMessageId, Recipient.",
                 "contains": {
                   "type": "object",
                   "properties": {
@@ -1451,7 +1451,7 @@
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 1,
-                "description": "Field mappings for the SentinelEntities entity. At least one must use a strong identifier (Entities) — Sentinel cannot construct the entity otherwise.",
+                "description": "Field mappings for the SentinelEntities entity. Needs at least one strong identifier: Entities.",
                 "contains": {
                   "type": "object",
                   "properties": {
@@ -1505,7 +1505,7 @@
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 3,
-                "description": "Field mappings for the SubmissionMail entity. At least one must use a strong identifier (SubmissionId, NetworkMessageId, Recipient, Submitter) — Sentinel cannot construct the entity otherwise.",
+                "description": "Field mappings for the SubmissionMail entity. Needs at least one strong identifier: SubmissionId, NetworkMessageId, Recipient, Submitter.",
                 "contains": {
                   "type": "object",
                   "properties": {
@@ -1561,7 +1561,7 @@
     },
     "exclusions": {
       "type": "array",
-      "description": "Tuning exclusions appended to the deployed query in order, each documented with a reason. A per-endpoint exclusion is a separate deployment entry in UDLF, so there is no tenant field here.",
+      "description": "Tuning exclusions appended to the deployed query in order, each with a reason.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -1595,7 +1595,7 @@
     },
     "advanced": {
       "type": "object",
-      "description": "Escape hatch for Sentinel API properties this sub-schema does not model. Passed through verbatim, so keys must match the API exactly. Prefer a modelled field where one exists — anything here is unvalidated and invisible to tooling.",
+      "description": "Escape hatch for unmodelled Sentinel API properties. Passed through verbatim and unvalidated; prefer a modelled field.",
       "additionalProperties": {
         "type": [
           "string",

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://detectionflow.com/schemas/udlf/config/splunk-contentctl-v5-6/v0.1.0.json",
   "title": "UDLF deployment config — Splunk via contentctl v5.6",
-  "description": "Optional, opt-in sub-schema for the `config` block of a UDLF deployment whose `platform` is `splunk-contentctl-v5-6`. This is a different delivery path, not a different product: the deployer emits a contentctl-shaped detection YAML and hands it to the contentctl build pipeline (validate → build app → test), rather than building and uploading an app itself. Because contentctl owns the build, this block mirrors contentctl's own field names and nesting so the emitted file needs no translation. Two consequences follow. First, `type` is the real discriminator — it selects the ESCU default deployment (and therefore the schedule), decides whether RBA and notables are emitted at all, and gates several other fields. Second, contentctl models are `extra=\"forbid\"` at every level, so this sub-schema is closed and offers no `advanced` passthrough: an unmodelled key would fail the contentctl build anyway.\n\nThe tool version is part of the platform name, not this file's semver. This schema targets **contentctl v5.6**, the last release of the 5.x line, and a deployment naming it is asserting that its config is convertible to a v5.6 detection. The later ESCU 6.x content format, consumed by the contentctl-ng rewrite, is a separate platform — `splunk-contentctl-ng` — with its own sub-schema; a detection that ships down both pipelines carries a deployment for each. This file's own `v0.1.0` line tracks revisions of *this* mapping onto contentctl, not contentctl releases.\n\nFields UDLF already owns are deliberately absent — ATT&CK IDs and CVEs come from the top-level `threat` block, implementation and false-positive prose from `detection_context`, tests from the top-level `tests` array, analytic stories from strategy membership, and `nist` is overwritten by contentctl from `type` so authoring it has no effect. This schema is NOT referenced by the UDLF core schema; apply it separately when you want the block validated. There is deliberately no `severity` override here, unlike most platforms: contentctl's Deployment.alert_action.notable model carries only rule_title, rule_description and nes_fields, so a per-detection severity cannot be authored through contentctl at all. `detection_context.severity` still informs the detection; it simply has nothing to override.",
+  "description": "Config for `platform: splunk-contentctl-v5-6`. Emits a contentctl v5.6-shaped detection for the build pipeline. `type` is the discriminator. Closed, no `advanced`.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -58,7 +58,7 @@
       "type": "string",
       "pattern": "^splunk-contentctl-v5-6::[0-9]+\\.[0-9]+\\.[0-9]+$",
       "default": "splunk-contentctl-v5-6::0.1.0",
-      "description": "Self-identifying sub-schema version for this config block, so this file can version independently of UDLF core as contentctl evolves."
+      "description": "Sub-schema revision this block was authored against, e.g. `splunk-contentctl-v5-6::0.1.0`."
     },
     "type": {
       "type": "string",
@@ -68,11 +68,11 @@
         "Hunting",
         "Correlation"
       ],
-      "description": "contentctl analytic type — the discriminator for the whole block. It selects the ESCU default deployment by name (`ESCU Default Configuration <type>`), which supplies the schedule and alert actions, and it determines whether notables and RBA are emitted: TTP gets both, Anomaly gets RBA only, Hunting gets neither, Correlation gets a notable titled `RBA: <name>`. Because the schedule is inherited from the matched deployment, there is no `schedule` field here — override it with the `deployment` block below."
+      "description": "contentctl analytic type, the discriminator for this block. Selects the ESCU default deployment (and its schedule) and decides whether notables and RBA are emitted."
     },
     "data_source": {
       "type": "array",
-      "description": "Names of the contentctl data sources this detection relies on. Each must resolve to an entry under the content pack's `data_sources/` directory. A single entry may join several sources with ` AND ` when the search correlates across them.",
+      "description": "contentctl data sources this detection relies on. Each must resolve under the pack's `data_sources/`. Join several with ` AND `.",
       "items": {
         "type": "string",
         "minLength": 1
@@ -85,7 +85,7 @@
     },
     "rba": {
       "type": "object",
-      "description": "Risk-Based Alerting. Valid only for `type` TTP and Anomaly — contentctl rejects it on Hunting and Correlation. For production TTP and Anomaly detections contentctl requires it with at least one risk object.",
+      "description": "Risk-Based Alerting. TTP and Anomaly only; contentctl rejects it on Hunting and Correlation.",
       "additionalProperties": false,
       "required": [
         "message",
@@ -95,7 +95,7 @@
         "message": {
           "type": "string",
           "minLength": 1,
-          "description": "Risk and notable message template. Every `$field$` token must correspond to a field the search actually produces — contentctl validates this for production detections.",
+          "description": "Risk and notable message template. Every `$field$` token must be a field the search produces.",
           "examples": [
             "A download cradle was executed on $dest$ by $user$"
           ]
@@ -154,7 +154,7 @@
               },
               "type": {
                 "type": "string",
-                "description": "Category of the threat object. contentctl enforces this list and rejects anything outside it at build time — note there is deliberately **no `other` fallback**, so a contentctl deployment cannot express an unrecognised threat object type at all. That is faithful to contentctl: its ThreatObjectType has 26 members and no OTHER/UNKNOWN. If you need a type outside this list, the value cannot ship through contentctl.\n\nThese spellings are contentctl's own and differ from the Splunk RBA community list (`ip_address` here versus `ip` there, `domain` versus `url_domain`). contentctl writes the value verbatim into savedsearches.conf, so it is what a running ES instance will contain. The `splunk-es` sub-schema accepts both vocabularies for exactly this reason; do not rewrite between them when a detection carries both deployments.",
+                "description": "Category of the threat object. contentctl's own spellings, enforced at build time with no `other` fallback. Differs from the Splunk RBA list; do not rewrite between them.",
                 "enum": [
                   "certificate_common_name",
                   "certificate_organization",
@@ -191,7 +191,7 @@
     },
     "drilldown_searches": {
       "type": "array",
-      "description": "Drilldown searches surfaced with the alert. contentctl requires at least two for production detections other than Hunting, one of which must contain the `%original_detection_search%` placeholder — that rule is gated on lifecycle, which lives outside this block, so it is enforced by the deployer rather than here. Omit entirely to let contentctl generate defaults from the risk objects.",
+      "description": "Drilldown searches surfaced with the alert. Omit to let contentctl generate defaults from the risk objects.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -210,7 +210,7 @@
           "search": {
             "type": "string",
             "minLength": 1,
-            "description": "Drilldown SPL. May contain `%original_detection_search%`, substituted with the detection's own search at build time."
+            "description": "Drilldown SPL. May contain `%original_detection_search%`, substituted at build time."
           },
           "earliest_offset": {
             "type": [
@@ -218,7 +218,7 @@
               "null"
             ],
             "minLength": 1,
-            "description": "Start of the drilldown window. contentctl requires this key explicitly — it has no default. Commonly `$info_min_time$`.",
+            "description": "Start of the drilldown window. Required by contentctl, with no default. Commonly `$info_min_time$`.",
             "examples": [
               "$info_min_time$"
             ]
@@ -229,7 +229,7 @@
               "null"
             ],
             "minLength": 1,
-            "description": "End of the drilldown window. contentctl requires this key explicitly — it has no default. Commonly `$info_max_time$`.",
+            "description": "End of the drilldown window. Required by contentctl, with no default. Commonly `$info_max_time$`.",
             "examples": [
               "$info_max_time$"
             ]
@@ -240,16 +240,16 @@
     "enabled_by_default": {
       "type": "boolean",
       "default": false,
-      "description": "Whether the saved search is enabled when the app is installed. contentctl permits `true` only for production TTP, Anomaly, and Correlation detections. Distinct from the UDLF deployment `mode`, which describes intended runtime behaviour rather than install-time state — a deployment may be `mode: alert` and still ship disabled for the customer to switch on."
+      "description": "Whether the saved search is enabled on install. Where the UDLF deployment `enabled` flag lands. contentctl permits `true` only for production TTP, Anomaly and Correlation."
     },
     "explanation": {
       "type": "string",
       "minLength": 1,
-      "description": "Longer-form text shown in the ES Use Case Library, where that should differ from the detection's description. Omit to let contentctl fall back to the description derived from `detection_context.description`."
+      "description": "Longer-form text for the ES Use Case Library. Omit to fall back to `detection_context.description`."
     },
     "tags": {
       "type": "object",
-      "description": "contentctl's tags block, mirroring its nesting so the emitted YAML needs no restructuring. Only the tags UDLF does not already own appear here — ATT&CK IDs and CVEs come from the top-level `threat` block, and analytic stories from strategy membership.",
+      "description": "contentctl's tags block. Only tags UDLF does not already own appear here.",
       "additionalProperties": false,
       "required": [
         "asset_type",
@@ -343,7 +343,7 @@
         },
         "atomic_guid": {
           "type": "array",
-          "description": "Atomic Red Team test GUIDs this detection covers. Each must match an `auto_generated_guid` in the Atomic Red Team catalogue.",
+          "description": "Atomic Red Team test GUIDs this detection covers. Each must match an `auto_generated_guid`.",
           "items": {
             "type": "string",
             "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
@@ -351,7 +351,7 @@
         },
         "throttling": {
           "type": "object",
-          "description": "Alert suppression. Note the narrower period syntax than raw Splunk — contentctl allows seconds, minutes, and hours only, not days.",
+          "description": "Alert suppression. Narrower period syntax than raw Splunk: seconds, minutes and hours only.",
           "additionalProperties": false,
           "required": [
             "fields",
@@ -361,7 +361,7 @@
             "fields": {
               "type": "array",
               "minItems": 1,
-              "description": "Fields to suppress on. Each must appear in the search, and none may contain a space — contentctl errors on spaces because the conf value is comma-delimited and unquoted.",
+              "description": "Fields to suppress on. Each must appear in the search, and none may contain a space.",
               "items": {
                 "type": "string",
                 "minLength": 1,
@@ -371,7 +371,7 @@
             "period": {
               "type": "string",
               "pattern": "^[0-9]+[smh]$",
-              "description": "Suppression window in seconds, minutes, or hours. Days are not accepted — express one day as `86400s`, `1440m`, or `24h`.",
+              "description": "Suppression window in seconds, minutes or hours. No days: write one day as `86400s`, `1440m` or `24h`.",
               "examples": [
                 "86400s",
                 "24h"
@@ -382,7 +382,7 @@
         "manual_test": {
           "type": "string",
           "minLength": 1,
-          "description": "Reason this detection cannot be tested automatically. Setting it makes contentctl skip the detection's tests rather than fail the build for missing them, so it should explain why rather than merely assert the fact."
+          "description": "Reason this detection cannot be tested automatically. Setting it makes contentctl skip its tests."
         },
         "event_schema": {
           "type": "string",
@@ -401,7 +401,7 @@
     },
     "deployment": {
       "type": "object",
-      "description": "Inline deployment override. Normally omitted: contentctl resolves the schedule and alert actions by matching `type` to one of the five built-in ESCU deployments. Supplying this block forces contentctl to build an Embedded deployment for this detection alone, overriding the type-based default. Use it only when this detection genuinely needs a different schedule or alert action from every other detection of its type.",
+      "description": "Inline deployment override. Normally omitted, since `type` resolves to a built-in ESCU deployment. Forces an Embedded deployment for this detection alone.",
       "additionalProperties": false,
       "properties": {
         "scheduling": {
@@ -451,7 +451,7 @@
         },
         "alert_action": {
           "type": "object",
-          "description": "Alert action override. Only `notable` and `rba` are implemented by contentctl — its `email`, `slack`, and `phantom` models exist but raise at serialize time, so they are excluded here rather than modelled as traps.",
+          "description": "Alert action override. Only `notable` and `rba` are implemented; contentctl's email, slack and phantom models raise at serialize time.",
           "additionalProperties": false,
           "properties": {
             "notable": {
@@ -467,7 +467,7 @@
                 "rule_title": {
                   "type": "string",
                   "minLength": 1,
-                  "description": "Notable title. The built-in deployments use the literal `%name%`, substituted with the detection name at build time.",
+                  "description": "Notable title. The built-in deployments use the literal `%name%`, substituted at build time.",
                   "examples": [
                     "%name%"
                   ]
@@ -498,7 +498,7 @@
             },
             "rba": {
               "type": "object",
-              "description": "Whether risk-based alerting is emitted. This is only the on/off switch — the risk objects themselves live in the top-level `rba` block of this config.",
+              "description": "Whether risk-based alerting is emitted. On/off only; the risk objects live in the top-level `rba` block.",
               "additionalProperties": false,
               "required": [
                 "enabled"

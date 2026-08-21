@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://detectionflow.com/schemas/udlf/lookup/v0.1.0.json",
   "title": "UDLF Lookup Schema v0.1.0",
-  "description": "Universal Detection Lifecycle Format (UDLF) lookup schema. A lookup is a named reference dataset — a list of RMM tool names, attacker binaries, approved CIDR ranges — that a detection matches against and references by name from a variant's 'requires' block. Unlike a macro, a lookup carries no language or platform axis: reference data is language-neutral, and six of the seven modelled platforms have the primitive in some form (Splunk csv lookup, Sentinel watchlist, Google SecOps reference list, Elastic value list, Cortex lookup dataset, CrowdStrike lookup file). SentinelOne has none, so a deployer targeting it inlines the values into the rule instead. Scoped to matching sets for now: a lookup declares its columns and designates one as the matched key, but what a deployer does with the non-key columns is deliberately unmodelled — enrichment tables (Splunk kvstore, Google data tables, UDM entity-field mapping) are a later concern. Size and ingestion limits are the deployer's to enforce, since they differ by an order of magnitude between platforms.",
+  "description": "UDLF lookup schema. A named reference dataset a detection matches against, referenced from a variant's 'requires'. Language-neutral.",
   "type": "object",
   "required": ["id", "name", "title", "metadata", "key", "columns", "data"],
   "additionalProperties": false,
@@ -15,7 +15,7 @@
     "name": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9_]{2,63}$",
-      "description": "The token the lookup is referenced by, both in detection logic and in a variant's 'requires' block (e.g. 'attacker_tools'). The pattern is a safe intersection of the targets — a Sentinel watchlist alias must be 3-64 characters and start and end alphanumeric, which is stricter than Splunk's lookup naming."
+      "description": "The token this lookup is referenced by, e.g. 'attacker_tools'."
     },
     "title": {
       "type": "string",
@@ -53,18 +53,18 @@
     "key": {
       "type": "string",
       "minLength": 1,
-      "description": "The column matched against — Sentinel's SearchKey, the field a Splunk lookup matches on, CrowdStrike's match() 'column', the single column of a Google reference list. Must name one of the entries in 'columns'; JSON Schema cannot express that cross-reference, so scripts/validate-lookups.py enforces it."
+      "description": "The column matched against. Must name one of the entries in 'columns'."
     },
     "match": {
       "type": "object",
-      "description": "How values in the key column are compared. Optional — omit for the universal default of exact, case-insensitive matching.",
+      "description": "How values in the key column are compared. Optional; defaults to exact, case-insensitive.",
       "additionalProperties": false,
       "properties": {
         "type": {
           "type": "string",
           "enum": ["exact", "wildcard", "regex", "cidr"],
           "default": "exact",
-          "description": "Comparison semantics. Portability differs sharply and the deployer must reject what its target cannot do: 'exact' works everywhere; 'cidr' works everywhere except Sentinel watchlists; 'wildcard' is Splunk (WILDCARD) and CrowdStrike (mode=glob, which caps the file at 20,000 rows) only; 'regex' is Google SecOps (REGEX) and CrowdStrike (mode=regex) only. Elastic value lists are documented as supporting no pattern matching at all."
+          "description": "Comparison semantics. Portability varies: 'exact' everywhere, 'cidr' not on Sentinel, 'wildcard' Splunk and CrowdStrike, 'regex' Google SecOps and CrowdStrike."
         },
         "case_sensitive": {
           "type": "boolean",
@@ -76,7 +76,7 @@
     "columns": {
       "type": "array",
       "minItems": 1,
-      "description": "The dataset's columns, in order. Every column is declared — including ones carried purely as context, such as a note explaining why each row is on the list — because a matching set that cannot say why a value matters is not useful in an alert. What a deployer does with the non-key columns is out of scope for this version.",
+      "description": "The dataset's columns, in order. Includes context-only columns such as a per-row note.",
       "items": {
         "type": "object",
         "required": ["name"],
@@ -106,12 +106,12 @@
             "format": {
               "type": "string",
               "enum": ["csv"],
-              "description": "Format of the referenced file. A closed enum of one — other formats (notably JSON, which CrowdStrike's match() also accepts) are a later addition rather than a restructure."
+              "description": "Format of the referenced file."
             },
             "file": {
               "type": "string",
               "pattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*\\.csv$",
-              "description": "Path to the data file, relative to this document. The first line must be a header row matching 'columns'. Kept relative so a lookup and its data move together, as contentctl does with its sibling CSVs."
+              "description": "Path to the data file, relative to this document. First line must be a header row matching 'columns'."
             }
           }
         },
@@ -124,7 +124,7 @@
             "rows": {
               "type": "array",
               "minItems": 1,
-              "description": "The rows themselves, for a list short enough to stay reviewable in a single diff. Each object's keys must match 'columns'. Prefer an external file once the list grows past what a reviewer will read.",
+              "description": "Inline rows, for a short list. Each object's keys must match 'columns'. Prefer 'file' as the list grows.",
               "items": {
                 "type": "object",
                 "minProperties": 1,
@@ -140,11 +140,11 @@
     "references": {
       "type": "array",
       "items": { "type": "string", "format": "uri" },
-      "description": "External reading URLs — the upstream source of the dataset belongs here."
+      "description": "External reading URLs. The dataset's upstream source belongs here."
     },
     "changelog": {
       "type": "array",
-      "description": "Append-only, chronological record of notable changes. Placed last as it grows unbounded. Replaces a separate 'updated_at' — the most recent entry's date is the effective last-updated date, and each entry's 'version' ties a change to the release it shipped in.",
+      "description": "Append-only history of notable changes. The most recent entry's date is the effective last-updated date.",
       "items": {
         "type": "object",
         "required": ["date", "version", "author", "summary"],

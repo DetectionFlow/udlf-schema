@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://detectionflow.com/schemas/udlf/v0.2.2.json",
   "title": "UDLF Detection Schema v0.2.2",
-  "description": "Universal Detection Lifecycle Format (UDLF) detection schema. A detection is one threat-idea that may carry multiple logic variants (each in its own language) and be deployed to multiple named targets, each with its own lifecycle stage and runtime mode. Deployment mechanics and secrets are never stored here — UDLF is the deploy-neutral source of truth.",
+  "description": "UDLF detection schema. One threat-idea, many logic variants, many deployment targets, each with its own lifecycle stage and runtime mode.",
   "type": "object",
   "required": ["id", "title", "lifecycle", "metadata"],
   "additionalProperties": false,
@@ -21,7 +21,7 @@
     "lifecycle": {
       "type": "string",
       "enum": ["research", "development", "testing", "live", "decommissioned"],
-      "description": "Overall maturity stage of the detection. Also the pre-deployment default inherited by any deployment that omits its own 'lifecycle'."
+      "description": "Overall maturity stage. Inherited by any deployment that omits its own 'lifecycle'."
     },
     "metadata": {
       "type": "object",
@@ -48,7 +48,7 @@
     },
     "detection_content": {
       "type": "array",
-      "description": "Detection logic variants. Each entry is one language + its logic. A deployer selects the variant appropriate to a target (e.g. Splunk -> spl). Several entries may share a language (e.g. a tstats-accelerated SPL alongside a raw-log SPL, or one tuned per client); give those an optional 'description' so a human can tell them apart. For language 'sigma', 'logic' is an embedded native Sigma rule object validated against the pinned SigmaHQ schema; for every other language 'logic' is the raw query string.",
+      "description": "Detection logic variants. Each entry is one language + logic. 'sigma' embeds a native Sigma object.",
       "items": {
         "type": "object",
         "required": ["language", "logic"],
@@ -57,20 +57,20 @@
           "language": {
             "type": "string",
             "enum": ["spl", "kql", "cql", "sigma", "yara", "yara-l", "python", "sql"],
-            "description": "Query language of this logic variant. 'sigma' embeds a native Sigma rule object. 'cql' is CrowdStrike Query Language (Falcon NG-SIEM / LogScale)."
+            "description": "Query language of this variant. 'sigma' embeds a native Sigma object. 'cql' is CrowdStrike Query Language."
           },
           "description": {
             "type": "string",
             "minLength": 1,
             "maxLength": 256,
-            "description": "Short human-readable label for this variant, e.g. 'Raw log SPL version' or 'Tuned for client X'. Documentation only — it does not select a variant at deploy time."
+            "description": "Short label distinguishing variants that share a language. Documentation only, not a deploy-time selector."
           },
           "logic": {
-            "description": "The detection logic. A raw query string for spl/kql/cql/yara/yara-l/python/sql; an embedded native Sigma rule object when language is 'sigma'."
+            "description": "The detection logic. A raw query string, or an embedded Sigma rule object when language is 'sigma'."
           },
           "requires": {
             "type": "array",
-            "description": "Supporting content this variant's logic depends on — macros (reusable query snippets) and lookups (reference datasets), each authored as its own top-level UDLF document. Scoped to the variant rather than the detection because a dependency is a property of a specific logic string, not of the threat idea: two variants may share a language yet disagree (a tstats-accelerated SPL needs a summariesonly macro, its raw-log sibling does not), which a detection-level list could not express. Declared explicitly rather than parsed out of the logic, since inference would need a parser per language, and an explicit list also tells a deployer targeting a platform with no such primitive (e.g. SentinelOne, which has neither) that it must inline the content instead of creating a shared object. A macro requirement resolves on this variant's 'language' together with 'name'; a lookup resolves on name alone.",
+            "description": "Macros and lookups this variant's logic depends on, each its own UDLF document. Declared per variant, not per detection.",
             "items": {
               "type": "object",
               "required": ["type", "name"],
@@ -84,7 +84,7 @@
                 "name": {
                   "type": "string",
                   "pattern": "^[a-z][a-z0-9_]{2,63}$",
-                  "description": "The supporting document's 'name' — the same token that appears in this variant's logic (e.g. a backticked SPL macro, or the lookup name in an 'inputlookup'). Referenced by name rather than by id because the name is what the deployer must substitute at the call site."
+                  "description": "The supporting document's 'name', the same token that appears in this variant's logic."
                 }
               }
             }
@@ -132,15 +132,15 @@
         },
         "implementation_guidance": {
           "type": "string",
-          "description": "How to implement the detection (data sources to collect, prerequisites, tuning). Free text (multiline). Renamed from v0.2.0 'how_to_implement'."
+          "description": "How to implement: data sources, prerequisites, tuning. Free text."
         },
         "investigation_guidance": {
           "type": "string",
-          "description": "Guidance for investigating alerts from this detection. Free text (multiline). Indicative pointers for an analyst or agent, not a rigid step-by-step runbook."
+          "description": "Guidance for investigating alerts from this detection. Free text."
         },
         "attack_procedures": {
           "type": "string",
-          "description": "The TTP procedure(s) that trigger this detection — the actual attacker command line(s) or example execution that would cause it to fire. Free text (multiline) for now; may gain structure in a later version."
+          "description": "Attacker command line(s) or example execution that fires this detection. Free text."
         },
         "references": {
           "type": "array",
@@ -156,7 +156,7 @@
       "properties": {
         "attack_version": {
           "type": "string",
-          "description": "ATT&CK release this detection was authored against (e.g. \"19\"). Documents authoring context; does not gate validation."
+          "description": "ATT&CK release this detection was authored against (e.g. \"19\"). Does not gate validation."
         },
         "attack": {
           "type": "array",
@@ -173,7 +173,7 @@
               },
               "tactics": {
                 "type": "array",
-                "description": "Tactics linked to this technique. Additive union enum — forward-tolerant across ATT&CK releases.",
+                "description": "Tactics linked to this technique. Additive union enum, forward-tolerant across ATT&CK releases.",
                 "items": {
                   "type": "string",
                   "enum": [
@@ -223,7 +223,7 @@
     },
     "tests": {
       "type": "array",
-      "description": "Validation tests. Each entry names a test framework and carries fields appropriate to it. 'framework' is intentionally open/extensible; the three known frameworks (replay, synthetic, atomic-red-team) are validated conditionally.",
+      "description": "Validation tests. 'framework' is open/extensible; replay, synthetic and atomic-red-team get conditional validation.",
       "items": {
         "type": "object",
         "required": ["name", "framework"],
@@ -235,12 +235,12 @@
           },
           "framework": {
             "type": "string",
-            "description": "Test framework. Known values: replay, synthetic, atomic-red-team. Extensible — other values are accepted without framework-specific validation."
+            "description": "Test framework. Known: replay, synthetic, atomic-red-team. Other values are accepted unvalidated."
           },
           "expected": {
             "type": "string",
             "enum": ["hit", "miss"],
-            "description": "Optional expected outcome. 'hit' = the detection should fire; 'miss' = benign data must not fire (false-positive test)."
+            "description": "Expected outcome. 'hit' = should fire; 'miss' = benign data must not fire."
           }
         },
         "allOf": [
@@ -309,7 +309,7 @@
     },
     "links": {
       "type": "array",
-      "description": "Typed relationships to other detections, strategies, or sources. 'type' and 'target' are required; the type-specific fields below are optional and scoped by convention to the type named in their description. The object is closed — 'type' is a closed enum, so a new link kind needs a schema bump anyway, and rejecting undeclared keys catches a misspelt 'license' rather than silently dropping a redistribution obligation.",
+      "description": "Typed relationships to other detections, strategies, or sources. 'type' and 'target' are required.",
       "items": {
         "type": "object",
         "required": ["type", "target"],
@@ -322,7 +322,7 @@
           },
           "target": {
             "type": "string",
-            "description": "The related resource, as a UUID or URI. For a 'derived_from' link to a public source this is a permalink to the upstream rule on its default branch — stable across syncs, unlike a commit permalink. Imports from a customer's own SIEM have no public URL and keep an internal scheme (e.g. 'splunk:<id>')."
+            "description": "The related resource, as a UUID or URI. For 'derived_from', a permalink to the upstream rule on its default branch."
           },
           "source_id": {
             "type": "string",
@@ -335,24 +335,24 @@
           },
           "source_version": {
             "type": "string",
-            "description": "derived_from: the source's own version — an ESCU/Elastic integer, a Sigma 'modified' date, or a commit SHA. Not the import date."
+            "description": "derived_from: the source's own version. An ESCU integer, a Sigma 'modified' date, or a commit SHA. Not the import date."
           },
           "license": {
             "type": "string",
             "format": "uri",
-            "description": "derived_from: URL of the licence the source is distributed under (e.g. https://github.com/SigmaHQ/Detection-Rule-License, https://www.apache.org/licenses/LICENSE-2.0). A URL rather than an SPDX identifier because it doubles as the attribution link some source licences require on redistribution. Optional in the schema — an import from a customer's own SIEM has no upstream licence — but a translator of public content should always emit it, alongside 'target' and 'modification'.",
+            "description": "derived_from: URL of the licence the source is distributed under. A URL, not an SPDX id, so it can serve as the attribution link.",
             "examples": ["https://github.com/SigmaHQ/Detection-Rule-License", "https://www.apache.org/licenses/LICENSE-2.0"]
           },
           "modification": {
             "type": "string",
-            "description": "derived_from: prominent notice stating how the source was changed, as required by licences such as Apache-2.0 section 4(b). E.g. 'Translated from Sigma YAML into UDLF v0.2.0; detection logic unchanged.'"
+            "description": "derived_from: notice stating how the source was changed, as licences such as Apache-2.0 4(b) require."
           }
         }
       }
     },
     "deployments": {
       "type": "array",
-      "description": "Where and how this detection runs. Each entry binds the detection to a 'platform' (the discriminator that selects the logic variant and scopes the free-form 'config' block) and, optionally, a named endpoint. First-class fields are the cross-vendor runtime axes only: platform, mode, optional name/lifecycle. Everything platform-specific (schedule, suppression, rba, vendor round-trip fields) lives in 'config'. Deployment mechanics and secrets (base_url, token, app, owner) live in platform/CI config, never here — they are resolved from the named endpoint.",
+      "description": "Where and how this detection runs. 'platform' is the discriminator; 'mode' is the runtime behaviour.",
       "items": {
         "type": "object",
         "required": ["platform", "mode"],
@@ -361,17 +361,17 @@
           "name": {
             "type": "string",
             "minLength": 1,
-            "description": "Optional friendly name for a specific endpoint (e.g. splunk-prod, splunk-staging). Resolved by the deployer/CI to real infrastructure and secrets. Omit when there is a single endpoint for the platform. Listed first so entries read name-then-platform when one platform has multiple named endpoints."
+            "description": "Friendly endpoint name (e.g. splunk-prod), resolved to real infrastructure by the deployer. Omit when the platform has one endpoint."
           },
           "platform": {
             "type": "string",
-            "description": "Deployment target — the discriminator. Known values: splunk, splunk-es, splunk-contentctl-v5-6, splunk-contentctl-ng, sentinel, defender-for-endpoint, crowdstrike, sentinel-one, elastic. Selects the logic variant (e.g. splunk-es -> spl, sentinel -> kql) and scopes the meaning of the free-form 'config' block. Usually names a product, but may name a delivery toolchain where that changes the shape of 'config': splunk and splunk-es are built and uploaded as an app by the deployer, while the two contentctl values hand a contentctl-shaped detection to a build pipeline instead. Those two are separate platforms rather than versions of one, because their config shapes differ: splunk-contentctl-v5-6 targets contentctl v5.6, and splunk-contentctl-ng targets contentctl-ng and the ESCU 6.x content format. A toolchain platform carries a version in its name only where that version is fixed; where it is not, the platform is named without one and its config sub-schema's semver identifies the format revision. Note that EDR targets are not scheduled-search platforms — sentinel-one evaluates continuously and its config carries active-response actions rather than a schedule. Intentionally open/extensible: unknown values validate against the common fields only.",
+            "description": "Deployment target and discriminator. Selects the logic variant and scopes 'config'. Open/extensible.",
             "examples": ["splunk", "splunk-es", "splunk-contentctl-v5-6", "splunk-contentctl-ng", "sentinel", "defender-for-endpoint", "crowdstrike", "sentinel-one", "elastic"]
           },
           "mode": {
             "type": "string",
             "enum": ["alert", "warranty", "monitoring", "disabled"],
-            "description": "Runtime behavior of this deployment. alert = runs and generates alerts/notables. warranty = runs against known-good/known-bad data to validate coverage; produces a test result, not an alert. monitoring = runs on a schedule and surfaces non-alerting output for human review (dashboards, risk/RBA contribution, hunt-triage queues, situational awareness); does not alert. disabled = present but not executing. Note: an ad-hoc/manual hunt is not a mode — it is a detection with no 'deployments' entry, executed on demand."
+            "description": "Runtime behaviour. alert = raises alerts/notables. warranty = runs against known-good/known-bad data. monitoring = runs without alerting. disabled = present but not executing."
           },
           "lifecycle": {
             "type": "string",
@@ -380,7 +380,7 @@
           },
           "config": {
             "type": "object",
-            "description": "Free-form, platform-scoped deployment configuration. Its meaning is set by the sibling 'platform'; this schema validates nothing inside it (additionalProperties: true) so vendor changes never force a UDLF bump. Holds deployment policy and vendor round-trip fidelity that UDLF does not model first-class: e.g. for splunk-es, 'rba' (message/risk_objects/threat_objects), 'schedule' (cron/lookback), 'suppression' (fields/window), 'notable', and 'drilldown_searches'. On import, populate from the vendor export; when authoring new, omit and let the deployer generate what the platform requires. Optional, opt-in sub-schemas describing the known shapes ship separately under schemas/udlf/config/<platform>/v<version>.json. They are deliberately NOT referenced from here — validate against one as a second, explicit pass when you want the block checked. A config block may name the sub-schema revision it was authored against via a 'schema' key (e.g. 'splunk-es::0.1.0'); those revisions carry their own semver line so config shapes version independently of UDLF core.",
+            "description": "Free-form deployment config, scoped by the sibling 'platform'. Not validated here. Opt-in sub-schemas under schemas/udlf/config/<platform>/.",
             "additionalProperties": true
           }
         }
@@ -388,7 +388,7 @@
     },
     "changelog": {
       "type": "array",
-      "description": "Append-only, chronological record of notable changes. Placed last as it grows unbounded. Replaces a separate 'updated_at' — the most recent entry's date is the effective last-updated date, and each entry's 'version' ties a change to the release it shipped in. Reference the affected language variant or deployment platform/endpoint in the summary prose.",
+      "description": "Append-only history of notable changes. The most recent entry's date is the effective last-updated date.",
       "items": {
         "type": "object",
         "required": ["date", "version", "author", "summary"],

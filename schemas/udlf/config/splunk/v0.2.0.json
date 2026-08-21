@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://detectionflow.com/schemas/udlf/config/splunk/v0.2.0.json",
   "title": "UDLF deployment config — Splunk Enterprise",
-  "description": "Optional, opt-in sub-schema for the `config` block of a UDLF deployment whose `platform` is `splunk`. Covers Splunk Enterprise where the deployer builds a custom app and uploads it, producing savedsearches.conf stanzas. No Enterprise Security features are assumed — no notable events, no risk-based alerting. This schema is NOT referenced by the UDLF core schema; the core schema leaves `config` free-form. Apply this file separately when you want the block validated. Deployment mechanics and secrets (base_url, token, app name, owner) are deliberately absent — they are resolved from the deployment's named endpoint by the deployer, never carried in content.",
+  "description": "Config for `platform: splunk`. Splunk Enterprise via a deployer-built app, producing savedsearches.conf stanzas. No ES features.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -10,7 +10,7 @@
       "type": "string",
       "pattern": "^splunk::[0-9]+\\.[0-9]+\\.[0-9]+$",
       "default": "splunk::0.2.0",
-      "description": "Self-identifying sub-schema version for this config block. Lets the block declare which revision of the Splunk config shape it was authored against, so this sub-schema can version independently of UDLF core. A Splunk field change bumps this file only, never the core schema."
+      "description": "Sub-schema revision this block was authored against, e.g. `splunk::0.2.0`."
     },
     "severity": {
       "type": "string",
@@ -21,14 +21,14 @@
         "low",
         "informational"
       ],
-      "description": "Severity for this deployment. **Optional — omit it and the deployer uses `detection_context.severity`.** Set it only to override the detection's severity for this target. Always uses UDLF's own vocabulary, whatever the platform's native scale is, so an author never has to know the vendor spelling; the deployer translates. Maps to savedsearches.conf `alert.severity`, whose scale is numeric — the deployer converts.",
+      "description": "Severity for this deployment. Optional, overrides `detection_context.severity`. Maps to `alert.severity`.",
       "examples": [
         "high"
       ]
     },
     "schedule": {
       "type": "object",
-      "description": "When the saved search runs. Supply exactly one of `cron` or `frequency` — `frequency` is authoring sugar that the deployer expands into a cron expression.",
+      "description": "When the saved search runs. Supply exactly one of `cron` or `frequency`.",
       "additionalProperties": false,
       "oneOf": [
         {
@@ -45,7 +45,7 @@
       "properties": {
         "cron": {
           "type": "string",
-          "description": "Cron expression governing when the search runs. Maps to savedsearches.conf `cron_schedule`. The pattern is fully anchored — JSON Schema `pattern` searches for a substring by default, which would otherwise accept any string merely containing a cron-shaped fragment.",
+          "description": "Cron expression for the search. Maps to `cron_schedule`.",
           "pattern": "^((@(annually|yearly|monthly|weekly|daily|hourly|reboot))|(@every (\\d+(ns|us|ms|s|m|h))+)|((((\\d+,)+\\d+|([\\d\\*]+(\\/|-)\\d+)|\\d+|\\*) ?){5,7}))$",
           "examples": [
             "0 * * * *",
@@ -55,7 +55,7 @@
         },
         "frequency": {
           "type": "string",
-          "description": "Recurring interval, expanded to a cron expression by the deployer. Splunk supports 1-59m, 1-23h or 1-30d only — anything more complex must use `cron`. Zero is not a valid interval. Do not put a cron expression in this field.",
+          "description": "Recurring interval, expanded to cron by the deployer. Splunk allows 1-59m, 1-23h or 1-30d; use `cron` for anything else.",
           "pattern": "^(([1-9]|[1-5][0-9])m|([1-9]|1[0-9]|2[0-3])h|([1-9]|[1-2][0-9]|30)d)$",
           "examples": [
             "15m",
@@ -66,7 +66,7 @@
         "lookback": {
           "type": "string",
           "minLength": 1,
-          "description": "Start of the search window, as a Splunk relative-time modifier. Maps to savedsearches.conf `dispatch.earliest_time`. Splunk relative-time syntax is broad and deliberately not pattern-constrained here.",
+          "description": "Start of the search window, a Splunk relative-time modifier. Maps to `dispatch.earliest_time`.",
           "examples": [
             "-70m@m",
             "-24h@h",
@@ -76,7 +76,7 @@
         "latest_time": {
           "type": "string",
           "minLength": 1,
-          "description": "End of the search window, as a Splunk relative-time modifier. Maps to savedsearches.conf `dispatch.latest_time`. Commonly offset back from now to allow for indexing lag.",
+          "description": "End of the search window, a Splunk relative-time modifier. Maps to `dispatch.latest_time`.",
           "examples": [
             "-10m@m",
             "now"
@@ -85,7 +85,7 @@
         "schedule_window": {
           "type": "string",
           "minLength": 1,
-          "description": "How far the scheduler may delay this search to reduce contention. Maps to savedsearches.conf `schedule_window`. `auto` lets Splunk choose.",
+          "description": "How far the scheduler may delay this search. Maps to `schedule_window`. `auto` lets Splunk choose.",
           "examples": [
             "auto",
             "0",
@@ -96,7 +96,7 @@
     },
     "suppression": {
       "type": "object",
-      "description": "Alert throttling — discard repeat alerts sharing the same values for `fields` within `window`. Maps to the savedsearches.conf `alert.suppress.*` keys.",
+      "description": "Alert throttling: discard repeat alerts sharing the same `fields` values within `window`. Maps to `alert.suppress.*`.",
       "additionalProperties": false,
       "required": [
         "fields",
@@ -106,12 +106,12 @@
         "fields": {
           "type": "array",
           "minItems": 1,
-          "description": "Fields whose matching values identify a duplicate alert. Each field must be produced by the search. Maps to `alert.suppress.fields`.",
+          "description": "Fields whose matching values identify a duplicate alert. Each must be produced by the search.",
           "items": {
             "type": "string",
             "minLength": 1,
             "pattern": "^[^ ]+$",
-            "description": "A field name. Spaces are not supported — the conf value is comma-delimited and unquoted."
+            "description": "A field name. No spaces: the conf value is comma-delimited and unquoted."
           }
         },
         "window": {
@@ -130,7 +130,7 @@
       "type": "integer",
       "minimum": 0,
       "default": 0,
-      "description": "Number of events that must be exceeded within the search window before the alert fires. 0 means fire on any result.",
+      "description": "Events that must be exceeded within the search window before the alert fires. 0 fires on any result.",
       "examples": [
         0,
         10
@@ -138,7 +138,7 @@
     },
     "advanced": {
       "type": "object",
-      "description": "Escape hatch for savedsearches.conf keys this sub-schema does not model. Values of any JSON type are accepted. A raw conf value is a string and passes through verbatim, so it must be spelled exactly as Splunk expects; objects and arrays are accepted too, for a deployer that would rather carry a conf value that is itself a JSON document as the structure it actually is and serialise it on the way out. Either way the content is unvalidated and invisible to tooling, so prefer a modelled field where one exists.",
+      "description": "Escape hatch for unmodelled savedsearches.conf keys. Passed through verbatim and unvalidated; prefer a modelled field.",
       "examples": [
         {
           "dispatch.ttl": "2p",

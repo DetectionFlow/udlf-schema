@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://detectionflow.com/schemas/udlf/config/udlf/v0.1.0.json",
+  "title": "UDLF deployment config — target-agnostic",
+  "description": "Deploy-neutral config for `platform: udlf`. Names no product; the deployer decides what to build. Open, so unknown keys pass through unvalidated.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "schema": {
+      "type": "string",
+      "pattern": "^udlf::[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "default": "udlf::0.1.0",
+      "description": "Sub-schema revision this block was authored against, e.g. `udlf::0.1.0`.",
+      "examples": ["udlf::0.1.0"]
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["critical", "high", "medium", "low", "informational"],
+      "description": "Severity for this deployment. Optional, overrides `detection_context.severity`.",
+      "examples": ["high"]
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["alert", "monitoring"],
+      "description": "Whether this deployment alerts. `monitoring` runs without alerting. Absent means the deployer decides.",
+      "examples": ["alert", "monitoring"]
+    },
+    "schedule": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "When the detection runs, in neutral terms. Open, so a target-specific key can ride along.",
+      "properties": {
+        "cron": {
+          "type": "string",
+          "description": "Cron expression governing when the detection runs. Standard 5-7 field cron plus the `@`-shortcut forms.",
+          "pattern": "^((@(annually|yearly|monthly|weekly|daily|hourly|reboot))|(@every (\\d+(ns|us|ms|s|m|h))+)|((((\\d+,)+\\d+|([\\d\\*]+(\\/|-)\\d+)|\\d+|\\*) ?){5,7}))$",
+          "examples": ["0 * * * *", "*/10 * * * *", "0 4 8-14 * *"]
+        },
+        "lookback": {
+          "type": "string",
+          "minLength": 1,
+          "description": "How far back each run searches. Unconstrained: a relative-time modifier, plain duration or ISO 8601 period all work.",
+          "examples": ["-24h", "60m", "PT1H", "-70m@m"]
+        }
+      }
+    }
+  }
+}
