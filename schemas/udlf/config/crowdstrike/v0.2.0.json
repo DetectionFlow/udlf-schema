@@ -1,0 +1,343 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://detectionflow.com/schemas/udlf/config/crowdstrike/v0.2.0.json",
+  "title": "UDLF deployment config — CrowdStrike Falcon Correlation Rules",
+  "description": "Config for `platform: crowdstrike`. Falcon correlation rules: presentation, classification, outcome and schedule window. The query lives in `detection_content`.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "type": "string",
+      "pattern": "^crowdstrike::[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "default": "crowdstrike::0.2.0",
+      "description": "Sub-schema revision this block was authored against, e.g. `crowdstrike::0.2.0`."
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "informational"
+      ],
+      "description": "Severity for this deployment. Optional, overrides `detection_context.severity`. The deployer translates to Falcon's numeric scale (10/30/50/70/90).",
+      "examples": [
+        "high"
+      ]
+    },
+    "details": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Correlation rule presentation and classification. `name` and `description` override the detection's.",
+      "allOf": [
+        {
+          "if": {
+            "not": {
+              "required": [
+                "tactic"
+              ]
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "technique"
+              ]
+            }
+          },
+          "$comment": "Falcon's UI presents techniques only once a tactic is chosen, and the valid technique set is tactic-dependent — a technique without a tactic has nothing to hang off."
+        },
+        {
+          "if": {
+            "properties": {
+              "tactic": {
+                "const": "CSTA0008"
+              }
+            },
+            "required": [
+              "tactic"
+            ]
+          },
+          "then": {
+            "properties": {
+              "technique": {
+                "enum": [
+                  "CST0021",
+                  "CST0022"
+                ]
+              }
+            }
+          },
+          "$comment": "AI Powered IOA -> Command and Scripting Interpreter, Malicious File."
+        },
+        {
+          "if": {
+            "properties": {
+              "tactic": {
+                "const": "CSTA0005"
+              }
+            },
+            "required": [
+              "tactic"
+            ]
+          },
+          "then": {
+            "properties": {
+              "technique": {
+                "enum": [
+                  "CST0004",
+                  "CST0005"
+                ]
+              }
+            }
+          },
+          "$comment": "Custom Intelligence -> Indicator of Attack, Indicator of Compromise."
+        },
+        {
+          "if": {
+            "properties": {
+              "tactic": {
+                "const": "CSTA0002"
+              }
+            },
+            "required": [
+              "tactic"
+            ]
+          },
+          "then": {
+            "properties": {
+              "technique": {
+                "const": "CST0012"
+              }
+            }
+          },
+          "$comment": "Exploit -> Exploit Mitigation."
+        },
+        {
+          "if": {
+            "properties": {
+              "tactic": {
+                "const": "CSTA0007"
+              }
+            },
+            "required": [
+              "tactic"
+            ]
+          },
+          "then": {
+            "properties": {
+              "technique": {
+                "enum": [
+                  "CSTA0020",
+                  "CSTA0018",
+                  "CSTA0019"
+                ]
+              }
+            }
+          },
+          "$comment": "Falcon Intel -> Attributed to adversary, Intelligence Indicator Domain, Intelligence Indicator Hash."
+        },
+        {
+          "if": {
+            "properties": {
+              "tactic": {
+                "const": "CSTA0006"
+              }
+            },
+            "required": [
+              "tactic"
+            ]
+          },
+          "then": {
+            "properties": {
+              "technique": {
+                "enum": [
+                  "CST0002",
+                  "CST0015",
+                  "CST0003"
+                ]
+              }
+            }
+          },
+          "$comment": "Falcon OverWatch -> Malicious Activity, Malicious File, Suspicious Activity."
+        },
+        {
+          "if": {
+            "properties": {
+              "tactic": {
+                "const": "CSTA0004"
+              }
+            },
+            "required": [
+              "tactic"
+            ]
+          },
+          "then": {
+            "properties": {
+              "technique": {
+                "enum": [
+                  "CST0006",
+                  "CST0008",
+                  "CST0007"
+                ]
+              }
+            }
+          },
+          "$comment": "Machine Learning -> Adware/PUP, Cloud-based ML, Sensor-based ML."
+        },
+        {
+          "if": {
+            "properties": {
+              "tactic": {
+                "const": "CSTA0003"
+              }
+            },
+            "required": [
+              "tactic"
+            ]
+          },
+          "then": {
+            "properties": {
+              "technique": {
+                "enum": [
+                  "CST0011",
+                  "CST0010"
+                ]
+              }
+            }
+          },
+          "$comment": "Post Exploit -> Malicious Tool Delivery, Malicious Tool Execution."
+        }
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Rule name in Falcon. Overrides the detection title for this deployment."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Rule description in Falcon. Overrides `detection_context.description` for this deployment."
+        },
+        "trigger": {
+          "type": "string",
+          "enum": [
+            "verbose",
+            "summary"
+          ],
+          "description": "`verbose` gives one outcome per matching result, `summary` one outcome for all matches. Both are capped per trigger."
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "detection",
+            "incident",
+            "case",
+            "event"
+          ],
+          "description": "What a match raises. `detection`, `incident` and `case` reach an analyst; `event` only records the match."
+        },
+        "tactic": {
+          "type": "string",
+          "description": "Tactic this rule maps to. `TA*` are ATT&CK; `CSTA*` are CrowdStrike's own categories with no ATT&CK equivalent.",
+          "enum": [
+            "TA0043",
+            "TA0042",
+            "TA0001",
+            "TA0002",
+            "TA0003",
+            "TA0004",
+            "TA0005",
+            "TA0006",
+            "TA0007",
+            "TA0008",
+            "TA0009",
+            "TA0011",
+            "TA0010",
+            "TA0040",
+            "TA0027",
+            "TA0041",
+            "TA0028",
+            "TA0029",
+            "TA0030",
+            "TA0031",
+            "TA0032",
+            "TA0033",
+            "TA0035",
+            "TA0037",
+            "TA0036",
+            "TA0034",
+            "CSTA0008",
+            "CSTA0005",
+            "CSTA0002",
+            "CSTA0007",
+            "CSTA0006",
+            "CSTA0004",
+            "CSTA0003"
+          ]
+        },
+        "technique": {
+          "type": "string",
+          "pattern": "^(CSTA?|T)\\d{4}(\\.\\d{3})?$",
+          "description": "Technique this rule maps to. Requires `tactic`; the valid set is tactic-dependent. Falcon supports only a subset of ATT&CK."
+        }
+      }
+    },
+    "schedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "When the correlation rule runs. Set `lookback` at least as long as `frequency` to cover late-arriving logs.",
+      "properties": {
+        "start": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "description": "UTC time to begin running the query. Defaults to 15 minutes after deployment when omitted.",
+          "examples": [
+            "2024-11-19T19:00:00Z"
+          ]
+        },
+        "end": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "description": "UTC time to stop running the query. Runs indefinitely when omitted.",
+          "examples": [
+            "2024-11-19T19:00:00Z"
+          ]
+        },
+        "frequency": {
+          "type": "string",
+          "pattern": "^(?:\\d+d(?:\\d+h)?(?:\\d+m)?(?:\\d+s)?|\\d+h(?:\\d+m)?(?:\\d+s)?|\\d+m(?:\\d+s)?|\\d+s)$",
+          "description": "How often the query runs, as a Go-style duration such as `1h0m`. Minimum `5m`.",
+          "examples": [
+            "5m",
+            "1h0m",
+            "24h0m"
+          ]
+        },
+        "lookback": {
+          "type": "string",
+          "pattern": "^(?:\\d+d(?:\\d+h)?(?:\\d+m)?(?:\\d+s)?|\\d+h(?:\\d+m)?(?:\\d+s)?|\\d+m(?:\\d+s)?|\\d+s)$",
+          "description": "How far back each run searches, as a Go-style duration such as `24h0m`. Maximum `168h` (7 days).",
+          "examples": [
+            "1h0m",
+            "24h0m",
+            "7d0h0m"
+          ]
+        }
+      }
+    },
+    "advanced": {
+      "type": "object",
+      "description": "Escape hatch for unmodelled Falcon API properties. Passed through verbatim and unvalidated; prefer a modelled field.",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "integer",
+          "boolean"
+        ]
+      }
+    }
+  }
+}
