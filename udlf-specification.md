@@ -103,7 +103,7 @@ per platform and no logic:
 | `splunk-contentctl-ng` | `config.finding` is present (equivalently `config.type` is `TTP` or `Correlation`) |
 | `sentinel` | always, while enabled. A scheduled analytics rule raises an alert on every match |
 | `defender-for-endpoint` | always. MDE custom detection rules cannot be non-alerting |
-| `crowdstrike` | always. `details.outcome` picks Detection or Incident, and both alert |
+| `crowdstrike` | `details.outcome` is `detection`, `incident` or `case`. `event` only records the match and reaches no one |
 | `sentinel-one` | always |
 | `udlf` | `config.mode` is `alert` |
 | `splunk` | **unspecified**. Plain Splunk alert actions such as email, webhook and script are per-customer destinations and live in `config.advanced` |
@@ -629,8 +629,9 @@ not, and their `config` shapes reflect that:
 
 - **`defender-for-endpoint`** couples frequency to lookback. You pick `1H`, `3H`, `12H`, `24H` or
   `NRT`, and MDE decides the window, so there is no separate lookback field.
-- **`crowdstrike`** schedules with a start/end window rather than a cron, and classifies rules
-  against a tactic vocabulary that mixes ATT&CK ids with proprietary `CST*` values.
+- **`crowdstrike`** schedules with a start/end window and Go-style durations (`1h0m`, `7d0h0m`)
+  rather than a cron, and classifies rules against a tactic vocabulary that mixes ATT&CK ids with
+  proprietary `CST*` values.
 - **`sentinel-one`** has no schedule at all, because STAR rules evaluate continuously. A rule is
   either a single-event match or a correlation of ordered subqueries over a time window.
 
@@ -654,7 +655,7 @@ explicit pass when you want the block checked:
 | `splunk-contentctl-ng` | `schemas/udlf/config/splunk-contentctl-ng/v0.1.0.json` |
 | `sentinel` | `schemas/udlf/config/sentinel/v0.1.0.json` |
 | `defender-for-endpoint` | `schemas/udlf/config/defender-for-endpoint/v0.1.0.json` |
-| `crowdstrike` | `schemas/udlf/config/crowdstrike/v0.1.0.json` |
+| `crowdstrike` | `schemas/udlf/config/crowdstrike/v0.2.0.json` |
 | `sentinel-one` | `schemas/udlf/config/sentinel-one/v0.1.0.json` |
 | `udlf` | `schemas/udlf/config/udlf/v0.1.0.json` |
 
