@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.3.0.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.3.1.json
 id: 7b2c1d3e-4f5a-6b7c-8d9e-0f1a2b3c4d5e
 title: Suspicious Scheduled Task Creation via Schtasks.exe
 lifecycle: live

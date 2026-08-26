@@ -1,0 +1,436 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://detectionflow.com/schemas/udlf/v0.3.1.json",
+  "title": "UDLF Detection Schema v0.3.1",
+  "description": "UDLF detection schema. One threat-idea, many logic variants, many deployment targets.",
+  "type": "object",
+  "required": ["id", "title", "lifecycle", "metadata"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for the detection (UUID v4)."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Human-readable title for the detection."
+    },
+    "lifecycle": {
+      "type": "string",
+      "enum": ["research", "development", "testing", "live", "decommissioned"],
+      "description": "Overall maturity stage. Inherited by any deployment that omits its own 'lifecycle'."
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Provenance and versioning metadata.",
+      "required": ["created_at", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "created_at": {
+          "type": "string",
+          "format": "date",
+          "description": "ISO 8601 date the detection was created (YYYY-MM-DD)."
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "description": "Semantic version number (e.g. 1.0.0, 2.1.3)."
+        },
+        "authors": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Authors of the detection."
+        }
+      }
+    },
+    "detection_content": {
+      "type": "array",
+      "description": "Detection logic variants. Each entry is one language + logic. 'sigma' embeds a native Sigma object.",
+      "items": {
+        "type": "object",
+        "required": ["language", "logic"],
+        "additionalProperties": false,
+        "properties": {
+          "language": {
+            "type": "string",
+            "enum": ["spl", "kql", "cql", "sigma", "yara", "yara-l", "python", "sql"],
+            "description": "Query language of this variant. 'sigma' embeds a native Sigma object. 'cql' is CrowdStrike Query Language."
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Short label distinguishing variants that share a language. Documentation only, not a deploy-time selector."
+          },
+          "logic": {
+            "description": "The detection logic. A raw query string, or an embedded Sigma rule object when language is 'sigma'."
+          },
+          "requires": {
+            "type": "array",
+            "description": "Macros and lookups this variant's logic depends on, each its own UDLF document. Declared per variant, not per detection.",
+            "items": {
+              "type": "object",
+              "required": ["type", "name"],
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["macro", "lookup"],
+                  "description": "Which kind of supporting document this is."
+                },
+                "name": {
+                  "type": "string",
+                  "description": "The supporting document's 'name', the same token that appears in this variant's logic."
+                }
+              }
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": ["language"],
+              "properties": { "language": { "const": "sigma" } }
+            },
+            "then": {
+              "properties": {
+                "logic": {
+                  "$ref": "https://raw.githubusercontent.com/SigmaHQ/sigma-specification/v2.1.0/json-schema/sigma-detection-rule-schema.json"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "logic": { "type": "string" }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "detection_context": {
+      "type": "object",
+      "description": "Human-facing context about the detection.",
+      "additionalProperties": false,
+      "properties": {
+        "severity": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low", "informational"],
+          "description": "Severity level of the detection."
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed description of what the detection identifies."
+        },
+        "false_positives": {
+          "type": "string",
+          "description": "Known false-positive scenarios. Free text."
+        },
+        "implementation_guidance": {
+          "type": "string",
+          "description": "How to implement: data sources, prerequisites, tuning. Free text."
+        },
+        "investigation_guidance": {
+          "type": "string",
+          "description": "Guidance for investigating alerts from this detection. Free text."
+        },
+        "attack_procedures": {
+          "type": "string",
+          "description": "Attacker command line(s) or example execution that fires this detection. Free text."
+        },
+        "references": {
+          "type": "array",
+          "items": { "type": "string", "format": "uri" },
+          "description": "External reading URLs (threat research, documentation)."
+        }
+      }
+    },
+    "threat": {
+      "type": "object",
+      "description": "Threat intelligence tagging (MITRE ATT&CK and related).",
+      "additionalProperties": false,
+      "properties": {
+        "attack_version": {
+          "type": "string",
+          "description": "ATT&CK release this detection was authored against (e.g. \"19\"). Does not gate validation."
+        },
+        "attack": {
+          "type": "array",
+          "description": "Technique-to-tactics pairings.",
+          "items": {
+            "type": "object",
+            "required": ["technique"],
+            "additionalProperties": false,
+            "properties": {
+              "technique": {
+                "type": "string",
+                "pattern": "^T[0-9]{4}(\\.[0-9]{3})?$",
+                "description": "MITRE ATT&CK technique or sub-technique ID (e.g. T1059, T1059.001)."
+              },
+              "tactics": {
+                "type": "array",
+                "description": "Tactics linked to this technique. Additive union enum, forward-tolerant across ATT&CK releases.",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "Reconnaissance",
+                    "Resource Development",
+                    "Initial Access",
+                    "Execution",
+                    "Persistence",
+                    "Privilege Escalation",
+                    "Defense Evasion",
+                    "Stealth",
+                    "Defense Impairment",
+                    "Credential Access",
+                    "Discovery",
+                    "Lateral Movement",
+                    "Collection",
+                    "Command and Control",
+                    "Exfiltration",
+                    "Impact"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "software": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^S[0-9]{4}$" },
+          "description": "MITRE ATT&CK software IDs (e.g. S0111)."
+        },
+        "groups": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^G[0-9]{4}$" },
+          "description": "MITRE ATT&CK group IDs (e.g. G0016)."
+        },
+        "cve": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^CVE-[0-9]{4}-[0-9]{4,}$" },
+          "description": "Related CVE identifiers (e.g. CVE-2021-44228)."
+        },
+        "custom_tags": {
+          "type": "object",
+          "description": "Free-form organizational tags. Keys and values are unconstrained.",
+          "additionalProperties": true
+        }
+      }
+    },
+    "tests": {
+      "type": "array",
+      "description": "Validation tests. 'framework' is open/extensible; replay, synthetic and atomic-red-team get conditional validation.",
+      "items": {
+        "type": "object",
+        "required": ["name", "framework"],
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Human-readable test name."
+          },
+          "framework": {
+            "type": "string",
+            "description": "Test framework. Known: replay, synthetic, atomic-red-team. Other values are accepted unvalidated."
+          },
+          "expected": {
+            "type": "string",
+            "enum": ["hit", "miss"],
+            "description": "Expected outcome. 'hit' = should fire; 'miss' = benign data must not fire."
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": ["framework"],
+              "properties": { "framework": { "const": "replay" } }
+            },
+            "then": {
+              "required": ["attack_data"],
+              "properties": {
+                "attack_data": {
+                  "type": "array",
+                  "description": "Recorded logs to replay.",
+                  "items": {
+                    "type": "object",
+                    "required": ["data"],
+                    "properties": {
+                      "data": { "type": "string", "format": "uri", "description": "URL to the recorded log data." },
+                      "source": { "type": "string" },
+                      "sourcetype": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": ["framework"],
+              "properties": { "framework": { "const": "synthetic" } }
+            },
+            "then": {
+              "required": ["log"],
+              "properties": {
+                "log": {
+                  "type": "object",
+                  "description": "Inline synthetic event."
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": ["framework"],
+              "properties": { "framework": { "const": "atomic-red-team" } }
+            },
+            "then": {
+              "required": ["technique", "test_guid"],
+              "properties": {
+                "technique": {
+                  "type": "string",
+                  "pattern": "^T[0-9]{4}(\\.[0-9]{3})?$",
+                  "description": "ATT&CK technique the atomic test exercises."
+                },
+                "test_guid": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Atomic Red Team auto_generated_guid."
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "links": {
+      "type": "array",
+      "description": "Typed relationships to other detections, strategies, or sources. 'type' and 'target' are required.",
+      "items": {
+        "type": "object",
+        "required": ["type", "target"],
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["derived_from", "supersedes", "superseded_by", "related", "part_of_strategy"],
+            "description": "Relationship type."
+          },
+          "target": {
+            "type": "string",
+            "description": "The related resource, as a UUID or URI. For 'derived_from', a permalink to the upstream rule on its default branch."
+          },
+          "source_id": {
+            "type": "string",
+            "description": "derived_from: the source's own identifier, e.g. the upstream Sigma or ESCU rule UUID."
+          },
+          "source_format": {
+            "type": "string",
+            "description": "derived_from: the format translated from (e.g. sigma, escu, splunk). Open/extensible.",
+            "examples": ["sigma", "escu", "splunk", "elastic"]
+          },
+          "source_version": {
+            "type": "string",
+            "description": "derived_from: the source's own version. An ESCU integer, a Sigma 'modified' date, or a commit SHA. Not the import date."
+          },
+          "license": {
+            "type": "string",
+            "format": "uri",
+            "description": "derived_from: URL of the licence the source is distributed under. A URL, not an SPDX id, so it can serve as the attribution link.",
+            "examples": ["https://github.com/SigmaHQ/Detection-Rule-License", "https://www.apache.org/licenses/LICENSE-2.0"]
+          },
+          "modification": {
+            "type": "string",
+            "description": "derived_from: notice stating how the source was changed, as licences such as Apache-2.0 4(b) require."
+          }
+        }
+      }
+    },
+    "deployments": {
+      "type": "array",
+      "description": "Where and how this detection runs. 'platform' is the discriminator; alerting is read from 'config'.",
+      "items": {
+        "type": "object",
+        "required": ["platform"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Friendly endpoint name (e.g. splunk-prod), resolved to real infrastructure by the deployer. Required for platform 'udlf'."
+          },
+          "platform": {
+            "type": "string",
+            "description": "Deployment target and discriminator. Selects the logic variant and scopes 'config'. Open/extensible.",
+            "examples": ["splunk", "splunk-es", "splunk-contentctl-v5-6", "splunk-contentctl-ng", "sentinel", "defender-for-endpoint", "crowdstrike", "sentinel-one", "elastic", "udlf"]
+          },
+          "lifecycle": {
+            "type": "string",
+            "enum": ["research", "development", "testing", "live", "decommissioned"],
+            "description": "Lifecycle stage of this deployment. Inherits top level when omitted. 'decommissioned' is removed, not shipped disabled."
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether this deployment executes once shipped. Default true. false means created but not executing."
+          },
+          "config": {
+            "type": "object",
+            "description": "Free-form config, scoped by the sibling 'platform'. Not validated here. Opt-in sub-schemas under schemas/udlf/config/<platform>/.",
+            "additionalProperties": true
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": ["platform"],
+              "properties": { "platform": { "const": "udlf" } }
+            },
+            "then": { "required": ["name"] }
+          },
+          {
+            "if": {
+              "required": ["lifecycle"],
+              "properties": { "lifecycle": { "const": "decommissioned" } }
+            },
+            "then": { "properties": { "enabled": { "const": false } } }
+          }
+        ]
+      }
+    },
+    "changelog": {
+      "type": "array",
+      "description": "Append-only history of notable changes. The most recent entry's date is the effective last-updated date.",
+      "items": {
+        "type": "object",
+        "required": ["date", "version", "author", "summary"],
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "ISO 8601 date of the change (YYYY-MM-DD)."
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+            "description": "Semantic version this change shipped in (e.g. 1.0.0)."
+          },
+          "author": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Who made the change."
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What changed and why. Reference the affected language variant or deployment target here."
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/lookup/v0.1.0.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/lookup/v0.1.1.json
 #
 # A file-backed matching set. The 'description' column is carried so an alert can
 # say *why* a tool is on the list; what a deployer does with non-key columns is

@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.3.0.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.3.1.json
 #
 # Showcase: one threat-idea, two logic variants (SPL + KQL), five deployments on
 # different platforms and delivery paths — each at its own lifecycle stage. Three

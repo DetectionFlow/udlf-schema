@@ -23,7 +23,7 @@ secrets out of it.
 ## What a detection looks like
 
 ```yaml
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.3.0.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.3.1.json
 id: a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d
 title: Process Injection with Defensive Tooling Tampering
 lifecycle: testing                     # research -> development -> testing -> live
@@ -65,23 +65,23 @@ Point your editor at the schema and you get completion and validation as you typ
 
 ```yaml
 # detections
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.3.0.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.3.1.json
 # strategies
 # yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/strategy/v0.2.0.json
 # macros
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/macro/v0.1.0.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/macro/v0.1.1.json
 # lookups
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/lookup/v0.1.0.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/lookup/v0.1.1.json
 ```
 
 In CI, use `check-jsonschema`, which resolves the remote Sigma `$ref` that `language: sigma`
 variants rely on:
 
 ```bash
-uvx check-jsonschema --schemafile schemas/udlf/v0.3.0.json examples/*.udlf.yaml
+uvx check-jsonschema --schemafile schemas/udlf/v0.3.1.json examples/*.udlf.yaml
 uvx check-jsonschema --schemafile schemas/udlf/strategy/v0.2.0.json examples/strategies/*.udlf.yaml
-uvx check-jsonschema --schemafile schemas/udlf/macro/v0.1.0.json examples/macros/*.udlf.yaml
-uvx check-jsonschema --schemafile schemas/udlf/lookup/v0.1.0.json examples/lookups/*.udlf.yaml
+uvx check-jsonschema --schemafile schemas/udlf/macro/v0.1.1.json examples/macros/*.udlf.yaml
+uvx check-jsonschema --schemafile schemas/udlf/lookup/v0.1.1.json examples/lookups/*.udlf.yaml
 ```
 
 Three things JSON Schema cannot check need a second pass. A deployment's `config` is validated by
@@ -98,10 +98,10 @@ come last:
 
 | File | What it describes |
 |------|-------------------|
-| `schemas/udlf/v0.3.0.json` | Detections. The main one. |
+| `schemas/udlf/v0.3.1.json` | Detections. The main one. |
 | `schemas/udlf/strategy/v0.2.0.json` | Strategies, which group detections under one narrative. |
-| `schemas/udlf/macro/v0.1.0.json` | Macros, reusable query snippets a detection pulls in via `requires`. |
-| `schemas/udlf/lookup/v0.1.0.json` | Lookups, reference datasets a detection matches against. |
+| `schemas/udlf/macro/v0.1.1.json` | Macros, reusable query snippets a detection pulls in via `requires`. |
+| `schemas/udlf/lookup/v0.1.1.json` | Lookups, reference datasets a detection matches against. |
 | `schemas/udlf/config/<platform>/` | Optional, opt-in shapes for a deployment's `config` block. |
 
 Nine platform config sub-schemas ship today: `splunk`, `splunk-es`, `splunk-contentctl-v5-6`,

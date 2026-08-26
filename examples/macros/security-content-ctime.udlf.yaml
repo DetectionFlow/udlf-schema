@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/macro/v0.1.0.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/macro/v0.1.1.json
 #
 # A parameterised SPL macro. Splunk parameters are untyped and have no defaults,
 # so 'type' and 'default' are forbidden when language is 'spl'. The argument name
