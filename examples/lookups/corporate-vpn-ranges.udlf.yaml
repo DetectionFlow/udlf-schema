@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/lookup/v0.1.0.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/lookup/v0.1.1.json
 #
 # Inline rows plus a non-default match type. Short enough to stay reviewable in
 # one diff, so it needs no sibling file. 'cidr' deploys everywhere except a

@@ -5,7 +5,7 @@ across multiple SIEM platforms. It is a **deploy-neutral source of truth**: a UD
 carries a detection's logic, threat context, tests, relationships and deployment *policy*, but
 never deployment *mechanics or secrets*.
 
-- **Schema (detection):** `schemas/udlf/v0.3.0.json`, `$id: https://detectionflow.com/schemas/udlf/v0.3.0.json`
+- **Schema (detection):** `schemas/udlf/v0.3.1.json`, `$id: https://detectionflow.com/schemas/udlf/v0.3.1.json`
 - **Schema (strategy):** `schemas/udlf/strategy/v0.2.0.json`, `$id: https://detectionflow.com/schemas/udlf/strategy/v0.2.0.json`
 - **File extension:** `.udlf.yaml`
 
@@ -196,7 +196,7 @@ the name is the token the deployer must substitute at the call site.
 ## The detection object
 
 ```yaml
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.3.0.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.3.1.json
 id: a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d          # UUID v4
 title: Process Injection with Defensive Tooling Tampering
 lifecycle: testing                                # overall stage + pre-deployment default
@@ -322,7 +322,7 @@ changelog:                                        # top-level, last: append-only
 | `detection_content[].logic` | ✓* | string \| object | String query, **or** an embedded Sigma object when `language: sigma`. |
 | `detection_content[].requires` | | array | Supporting content **this variant** depends on; `{ type, name }`. |
 | `…requires[].type` | ✓* | enum | `macro`\|`lookup`. |
-| `…requires[].name` | ✓* | string | The supporting document's `name`, the same token appearing in this variant's logic. `^[a-z][a-z0-9_]{2,63}$`. |
+| `…requires[].name` | ✓* | string | The supporting document's `name`, the same token appearing in this variant's logic. |
 | `detection_context` | | object | Human context (see below). |
 | `detection_context.severity` | | enum | `critical`\|`high`\|`medium`\|`low`\|`informational`. |
 | `detection_context.description` | | string | What the detection identifies. |
@@ -667,7 +667,7 @@ exist, and a platform with no sub-schema goes unvalidated rather than rejected. 
 hatch working as intended.
 
 Each carries its own semver line, versioned independently of UDLF core, which is why sub-schemas
-sit at `v0.1.0` and `v0.2.0` while the core schema is at `v0.3.0`. A block may declare which
+sit at `v0.1.0` and `v0.2.0` while the core schema is at `v0.3.1`. A block may declare which
 revision it was authored against:
 
 ```yaml
@@ -842,7 +842,7 @@ A macro is a named, reusable snippet of query logic. One document holds exactly 
 KQL equivalent of an SPL macro is a separate document reusing the same `name`.
 
 ```yaml
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/macro/v0.1.0.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/macro/v0.1.1.json
 id: 832ca4f6-6dc6-4043-9d90-f159169795e8
 name: security_content_ctime                      # the token referenced from `requires`
 title: Convert epoch time to a readable string
@@ -884,7 +884,7 @@ concern, for the same reason a schedule lives in `deployments[].config`. That co
 | Field | Required | Type | Notes |
 |-------|:---:|------|-------|
 | `id` | ✓ | string (uuid) | Unique identifier for this document. Each language variant has its own. |
-| `name` | ✓ | string | The referenced token, `^[a-z][a-z0-9_]{2,63}$`. That is a safe intersection, since a Sentinel `functionAlias` must be a valid KQL identifier. |
+| `name` | ✓ | string | The referenced token. |
 | `title` | ✓ | string (1-256) | Maps to Sentinel's `displayName`. |
 | `description` | | string | What it does and when to use it. |
 | `metadata` | ✓ | object | Same shape/rules as a detection's `metadata`. |
@@ -900,7 +900,7 @@ A lookup is a named reference dataset a detection matches against. It carries no
 `platform` or `deployments`, because reference data is language-neutral.
 
 ```yaml
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/lookup/v0.1.0.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/lookup/v0.1.1.json
 id: 9f4c1a77-2b6e-4d08-8f31-c5a70e2d4b19
 name: attacker_tools                              # the token referenced from `requires`
 title: Known attacker tool names
@@ -956,7 +956,7 @@ what its target cannot do:
 SentinelOne has no lookup feature at all. STAR rules match single events, so a deployer targeting
 it must inline the values into the rule.
 
-### Scope of v0.1.0
+### Scope of the lookup schema
 
 Lookups are **matching sets**. A lookup declares its columns and designates one as the matched
 `key`. What a deployer does with the remaining columns is unmodelled on purpose. Enrichment tables
@@ -970,7 +970,7 @@ at 3.8 MB; Elastic value lists default to ~9 MB).
 | Field | Required | Type | Notes |
 |-------|:---:|------|-------|
 | `id` | ✓ | string (uuid) | Unique lookup identifier. |
-| `name` | ✓ | string | The referenced token, `^[a-z][a-z0-9_]{2,63}$`. A Sentinel watchlist alias must be 3-64 characters, starting and ending alphanumeric. |
+| `name` | ✓ | string | The referenced token. |
 | `title` | ✓ | string (1-256) | Human-readable title. |
 | `description` | | string | Contents, origin, and how it is maintained. |
 | `metadata` | ✓ | object | Same shape/rules as a detection's `metadata`. |
@@ -985,14 +985,14 @@ at 3.8 MB; Elastic value lists default to ~9 MB).
 
 ```bash
 # Detection examples
-uvx check-jsonschema --schemafile schemas/udlf/v0.3.0.json examples/*.udlf.yaml
+uvx check-jsonschema --schemafile schemas/udlf/v0.3.1.json examples/*.udlf.yaml
 
 # Strategy examples
 uvx check-jsonschema --schemafile schemas/udlf/strategy/v0.2.0.json examples/strategies/*.udlf.yaml
 
 # Macro and lookup examples
-uvx check-jsonschema --schemafile schemas/udlf/macro/v0.1.0.json examples/macros/*.udlf.yaml
-uvx check-jsonschema --schemafile schemas/udlf/lookup/v0.1.0.json examples/lookups/*.udlf.yaml
+uvx check-jsonschema --schemafile schemas/udlf/macro/v0.1.1.json examples/macros/*.udlf.yaml
+uvx check-jsonschema --schemafile schemas/udlf/lookup/v0.1.1.json examples/lookups/*.udlf.yaml
 ```
 
 Macros and lookups each carry rules JSON Schema cannot express over a list of objects. It cannot
@@ -1021,6 +1021,13 @@ the network.
 - Google SecOps reference lists: https://docs.cloud.google.com/chronicle/docs/yara-l/reference-list-syntax
 - Atomic Red Team: https://github.com/redcanaryco/atomic-red-team
 - NOVA: https://github.com/fr0gger/nova-framework
+
+## Changes in v0.3.1
+
+Core `v0.3.1`, macro `v0.1.1`, and lookup `v0.1.1` remove the length, lowercase-only, and
+leading-alpha restrictions from macro and lookup names, including names used by
+`detection_content[].requires`. The preceding schema versions remain served unchanged, so files
+pinned to them retain the original `^[a-z][a-z0-9_]{2,63}$` rule.
 
 ## Changes in v0.3.0
 
