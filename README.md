@@ -86,7 +86,8 @@ uvx check-jsonschema --schemafile schemas/udlf/lookup/v0.1.1.json examples/looku
 
 Three things JSON Schema cannot check need a second pass. A deployment's `config` is validated by
 platform, a lookup's `key` must name a declared column, and a KQL macro's defaulted arguments must
-come last:
+come last. The macro pass also checks that an SPL macro's `name` is its Splunk stanza name, `name(N)`
+for N arguments:
 
 ```bash
 ./scripts/validate-config.py  --strict examples/*.udlf.yaml

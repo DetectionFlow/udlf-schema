@@ -14,7 +14,7 @@
     },
     "name": {
       "type": "string",
-      "description": "The token this macro is referenced by, e.g. 'security_content_summariesonly'. Shared across language variants."
+      "description": "The token this macro is referenced by, e.g. 'security_content_summariesonly'. For spl, the Splunk stanza name: 'name(N)' for N arguments."
     },
     "title": {
       "type": "string",
@@ -56,7 +56,7 @@
     },
     "arguments": {
       "type": "array",
-      "description": "Ordered parameter list for a parameterised macro. Omit for a zero-argument macro; for spl the count is part of the name.",
+      "description": "Ordered parameter list for a parameterised macro. Omit for a zero-argument macro. For spl, 'name' must end in '(N)' where N is the count.",
       "items": {
         "type": "object",
         "required": ["name"],

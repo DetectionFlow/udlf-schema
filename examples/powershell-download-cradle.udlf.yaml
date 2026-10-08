@@ -57,11 +57,12 @@ detection_content:
       | `security_content_ctime(lastTime)`
       | where count > 0
     # Supporting content this variant depends on, declared rather than parsed out
-    # of the query. Resolves to examples/macros/security-content-ctime.udlf.yaml —
-    # by name, plus this variant's own language.
+    # of the query. Resolves to examples/macros/security-content-ctime-1.udlf.yaml —
+    # by name, plus this variant's own language. An SPL macro's name is its Splunk
+    # stanza name, so the one-argument call names security_content_ctime(1).
     requires:
       - type: macro
-        name: security_content_ctime
+        name: security_content_ctime(1)
 
 tests:
   - name: PowerShell download cradle (Atomic Red Team)

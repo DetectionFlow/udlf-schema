@@ -2,8 +2,8 @@
 """Structural validation of UDLF macro documents.
 
 `check-jsonschema` validates a macro's shape, including the per-language rules
-about which of `type` and `default` are allowed. Three things it cannot express
-over a list of objects are checked here instead:
+about which of `type` and `default` are allowed. Four things it cannot express
+are checked here instead:
 
   * for `kql`, a defaulted argument may not be followed by a non-defaulted one —
     Kusto requires optional parameters last, so the reverse order produces an
@@ -12,6 +12,9 @@ over a list of objects are checked here instead:
   * every declared argument must actually appear at its substitution point in
     `definition` ($name$ for spl, ?name for cql) — a declared-but-unused
     argument is a rename that was only half applied
+  * for `spl`, `name` is the Splunk stanza name, so it must end in `(N)` exactly
+    when the macro takes N arguments — a bare name with arguments, or `(N)` with
+    a different count, is the same half-applied rename
 
 Run it after the schema pass — it validates against the schema first, so a
 document that fails there is reported once, here, rather than twice.
@@ -24,6 +27,7 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
+import re
 import sys
 
 import jsonschema
@@ -35,6 +39,34 @@ SCHEMA_DIR = pathlib.Path(__file__).resolve().parent.parent / "schemas" / "udlf"
 # parameters are bare identifiers, so there is no token to search for without
 # risking a match inside a string literal or a field name.
 SUBSTITUTION = {"spl": "${}$", "cql": "?{}"}
+
+# A Splunk macros.conf stanza name for a parameterised macro: `name(N)`.
+SPL_STANZA = re.compile(r"^(.*)\((\d+)\)$")
+
+
+def check_spl_name(name: str, argument_count: int) -> list[str]:
+    """Check an SPL macro's name agrees with its argument count."""
+    match = SPL_STANZA.match(name)
+    if not match:
+        if argument_count:
+            return [
+                f"name: '{name}' takes {argument_count} argument(s), so the "
+                f"Splunk stanza name is '{name}({argument_count})'"
+            ]
+        return []
+
+    problems = []
+    bare, declared = match.group(1), int(match.group(2))
+    if not bare:
+        problems.append(f"name: '{name}' has nothing before the argument count")
+    if declared == 0:
+        problems.append(f"name: '{name}' — a zero-argument macro uses the bare name")
+    elif declared != argument_count:
+        problems.append(
+            f"name: '{name}' declares {declared} argument(s) but 'arguments' "
+            f"has {argument_count}"
+        )
+    return problems
 
 
 def latest_schema() -> pathlib.Path:
@@ -63,6 +95,11 @@ def check(path: pathlib.Path, validator: jsonschema.Draft202012Validator) -> lis
         return problems
 
     arguments = doc.get("arguments") or []
+    language = doc["language"]
+
+    if language == "spl":
+        problems.extend(check_spl_name(doc["name"], len(arguments)))
+
     if not arguments:
         return problems
 
@@ -70,8 +107,6 @@ def check(path: pathlib.Path, validator: jsonschema.Draft202012Validator) -> lis
     duplicates = {name for name in names if names.count(name) > 1}
     if duplicates:
         problems.append(f"arguments: duplicate name(s) {sorted(duplicates)}")
-
-    language = doc["language"]
 
     if language == "kql":
         seen_default = None

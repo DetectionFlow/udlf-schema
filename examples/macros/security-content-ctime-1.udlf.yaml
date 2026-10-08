@@ -2,9 +2,10 @@
 #
 # A parameterised SPL macro. Splunk parameters are untyped and have no defaults,
 # so 'type' and 'default' are forbidden when language is 'spl'. The argument name
-# matches the $field$ substitution token in the definition.
+# matches the $field$ substitution token in the definition. 'name' is the Splunk
+# stanza name, so it ends in the argument count: (1) for this one argument.
 id: 832ca4f6-6dc6-4043-9d90-f159169795e8
-name: security_content_ctime
+name: security_content_ctime(1)
 title: Convert epoch time to a readable string
 
 description: >-
