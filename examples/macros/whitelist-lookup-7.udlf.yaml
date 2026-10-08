@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/macro/v0.1.1.json
+#
+# One of two arities of the same SPL macro. Splunk keys a macro on its name and
+# its argument count, so [whitelist_lookup(7)] and [whitelist_lookup(8)] are two
+# stanzas with two definitions. Each is its own document, named by its stanza
+# name, and a detection's 'requires' names the exact one it calls.
+id: de4769df-257d-4c53-9922-b4aebe6e3358
+name: whitelist_lookup(7)
+title: Drop events matching the detection whitelist (7 fields)
+
+description: >-
+  Drops events that match an entry in the detection whitelist, compared on seven
+  fields. The eight-field form, whitelist_lookup(8), is a separate macro.
+
+metadata:
+  created_at: "2026-10-08"
+  version: "1.0.0"
+  authors:
+    - Detection Engineering Team
+
+language: spl
+arguments:
+  - name: rule
+  - name: user
+  - name: src
+  - name: dest
+  - name: process
+  - name: parent_process
+  - name: command_line
+
+definition: >-
+  lookup detection_whitelist rule AS $rule$
+  user AS $user$
+  src AS $src$
+  dest AS $dest$
+  process AS $process$
+  parent_process AS $parent_process$
+  command_line AS $command_line$
+  OUTPUT whitelisted | where isnull(whitelisted)

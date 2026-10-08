@@ -164,10 +164,12 @@ The two behave differently because the platforms do:
 - **A macro is language-scoped.** Only three targets have it, and each expresses it differently: a
   Splunk `macros.conf` stanza expanded as text, a Microsoft Sentinel `savedSearches` function with a
   `functionAlias`, a CrowdStrike LogScale saved query called as `$"name"()`. So a macro document
-  carries exactly one `language` (`spl`, `kql` or `cql`), and the KQL equivalent of an SPL macro is a
-  *separate document reusing the same `name`*. Elastic, Google SecOps, Cortex XSIAM and SentinelOne
-  have no macro feature at all, so they are absent from the enum by design. A macro that could never
-  be built should not be authorable.
+  carries exactly one `language` (`spl`, `kql` or `cql`), and the KQL equivalent of a zero-argument
+  SPL macro is a *separate document reusing the same `name`*. For a parameterised SPL macro the KQL
+  document uses the bare name, since the `(N)` suffix is Splunk's key and nothing else's (see
+  [SPL names carry the argument count](#spl-names-carry-the-argument-count)). Elastic, Google
+  SecOps, Cortex XSIAM and SentinelOne have no macro feature at all, so they are absent from the
+  enum by design. A macro that could never be built should not be authorable.
 - **A lookup is not.** Reference data is language-neutral, and six of the seven modelled platforms
   have it in some form (Splunk csv lookup, Sentinel watchlist, Google SecOps reference list, Elastic
   value list, Cortex lookup dataset, CrowdStrike lookup file). A lookup document has no `language`,
@@ -191,7 +193,9 @@ raw-log sibling does not, and a detection-level list could not express that.
 
 Resolution follows from that placement. A **macro** resolves on `name` plus the enclosing variant's
 `language`, and a **lookup** resolves on `name` alone. References are by name rather than by id because
-the name is the token the deployer must substitute at the call site.
+the name is the token the deployer must substitute at the call site. For `spl`, `name` includes the
+argument count, so a call with seven arguments resolves `whitelist_lookup(7)` and never
+`whitelist_lookup`.
 
 ## The detection object
 
@@ -245,7 +249,7 @@ detection_content:                                # array of language+logic vari
       | lookup attacker_tools attacker_tool_names AS SourceImage OUTPUT description
     requires:                                     # scoped to THIS variant, not the detection
       - type: macro                               # resolves on name + this variant's language
-        name: security_content_ctime
+        name: security_content_ctime(1)           # spl: the stanza name, argument count included
       - type: lookup                              # resolves on name alone
         name: attacker_tools
   - language: kql
@@ -322,7 +326,7 @@ changelog:                                        # top-level, last: append-only
 | `detection_content[].logic` | ✓* | string \| object | String query, **or** an embedded Sigma object when `language: sigma`. |
 | `detection_content[].requires` | | array | Supporting content **this variant** depends on; `{ type, name }`. |
 | `…requires[].type` | ✓* | enum | `macro`\|`lookup`. |
-| `…requires[].name` | ✓* | string | The supporting document's `name`, the same token appearing in this variant's logic. |
+| `…requires[].name` | ✓* | string | The supporting document's `name`. For an `spl` macro that is the stanza name, so a parameterised call names `foo(2)`, not `foo`. |
 | `detection_context` | | object | Human context (see below). |
 | `detection_context.severity` | | enum | `critical`\|`high`\|`medium`\|`low`\|`informational`. |
 | `detection_context.description` | | string | What the detection identifies. |
@@ -839,12 +843,12 @@ changelog:                                        # top-level, last (same shape 
 ## The macro object
 
 A macro is a named, reusable snippet of query logic. One document holds exactly one `language`; the
-KQL equivalent of an SPL macro is a separate document reusing the same `name`.
+KQL equivalent of an SPL macro is a separate document.
 
 ```yaml
 # yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/macro/v0.1.1.json
 id: 832ca4f6-6dc6-4043-9d90-f159169795e8
-name: security_content_ctime                      # the token referenced from `requires`
+name: security_content_ctime(1)                   # the token referenced from `requires`
 title: Convert epoch time to a readable string
 description: Converts an epoch timestamp field to an ISO-8601-style string in place.
 
@@ -859,6 +863,21 @@ arguments:                                        # omit entirely for a zero-arg
 definition: 'convert timeformat="%Y-%m-%dT%H:%M:%S" ctime($field$)'
 ```
 
+### SPL names carry the argument count
+
+For `language: spl`, a macro's `name` is its Splunk `macros.conf` stanza name:
+
+- zero arguments: the bare name, `security_content_summariesonly`
+- N arguments: `name(N)`, such as `security_content_ctime(1)` or `whitelist_lookup(7)`
+
+Splunk keys a macro on its name and its argument count together, so `[whitelist_lookup(7)]` and
+`[whitelist_lookup(8)]` are two macros with two definitions. Each is its own UDLF document and its
+own file, and a detection's `requires[].name` names the exact one. A name without the count could
+identify only one of them, and a repository path keyed on it could hold only one.
+
+`kql` and `cql` names stay bare. Sentinel functions and LogScale saved queries are keyed by name
+alone and declare their signature separately.
+
 ### Argument rules differ by language
 
 The three targets disagree about parameters, and the schema enforces the difference rather than
@@ -866,14 +885,15 @@ papering over it:
 
 | `language` | `type` | `default` | Substitution token | Notes |
 |---|:---:|:---:|---|---|
-| `spl` | forbidden | forbidden | `$name$` | Splunk parameters are untyped and have no defaults. Arity is load-bearing: `[name(2)]` and `[name]` are different macros. |
+| `spl` | forbidden | forbidden | `$name$` | Splunk parameters are untyped and have no defaults. Arity is load-bearing: `[name(2)]` and `[name]` are different macros, so `name` ends in `(N)` and N equals `len(arguments)`. |
 | `kql` | **required** | allowed | bare identifier | Sentinel declares a typed signature (`functionParameters: 'argSpan: timespan'`) and the function cannot be created without it. Defaults must be scalar literals and come after non-defaulted parameters. |
 | `cql` | forbidden | allowed | `?name` | LogScale parameters are untyped. Defaults map to `?{name=default}`, honoured in saved searches but ignored in the UI and dashboards. |
 
 A `default` must be a scalar, because neither target can express a composite one. The "defaulted
 parameters last" rule cannot be stated in JSON Schema over an unbounded array, so
-`scripts/validate-macros.py` enforces it, along with unique argument names and the requirement that
-each declared argument appears at its substitution point in `definition`.
+`scripts/validate-macros.py` enforces it, along with unique argument names, the requirement that
+each declared argument appears at its substitution point in `definition`, and the agreement between
+an SPL macro's `(N)` suffix and its argument count.
 
 `definition` carries logic only. The surrounding platform object's mechanics are the deployer's
 concern, for the same reason a schedule lives in `deployments[].config`. That covers Sentinel's
@@ -884,7 +904,7 @@ concern, for the same reason a schedule lives in `deployments[].config`. That co
 | Field | Required | Type | Notes |
 |-------|:---:|------|-------|
 | `id` | ✓ | string (uuid) | Unique identifier for this document. Each language variant has its own. |
-| `name` | ✓ | string | The referenced token. |
+| `name` | ✓ | string | The referenced token. For `spl`, the Splunk stanza name: `name(N)` when parameterised. |
 | `title` | ✓ | string (1-256) | Maps to Sentinel's `displayName`. |
 | `description` | | string | What it does and when to use it. |
 | `metadata` | ✓ | object | Same shape/rules as a detection's `metadata`. |
@@ -1021,6 +1041,16 @@ the network.
 - Google SecOps reference lists: https://docs.cloud.google.com/chronicle/docs/yara-l/reference-list-syntax
 - Atomic Red Team: https://github.com/redcanaryco/atomic-red-team
 - NOVA: https://github.com/fr0gger/nova-framework
+
+## SPL macro naming convention
+
+An SPL macro's `name` is its Splunk stanza name, `name(N)` for N arguments, where it was previously
+the bare name at every arity. Two arities of one name are now two documents rather than one. See
+[SPL names carry the argument count](#spl-names-carry-the-argument-count).
+
+No schema version changes. `name` was already an unconstrained string, so core `v0.3.1` and macro
+`v0.1.1` remain the served versions and every existing file stays schema-valid. The convention is
+enforced by `scripts/validate-macros.py`, which rejects a parameterised SPL macro under a bare name.
 
 ## Changes in v0.3.1
 

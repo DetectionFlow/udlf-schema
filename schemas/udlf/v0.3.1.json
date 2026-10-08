@@ -83,7 +83,7 @@
                 },
                 "name": {
                   "type": "string",
-                  "description": "The supporting document's 'name', the same token that appears in this variant's logic."
+                  "description": "The supporting document's 'name'. For an spl macro that is the stanza name: 'foo(2)' for a two-argument call, not 'foo'."
                 }
               }
             }

@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/macro/v0.1.1.json
+#
+# The eight-argument sibling of whitelist_lookup(7). Same bare name, different
+# Splunk stanza, so a different document with its own id and definition.
+id: d01ce485-4a14-4345-82ca-ab4f323499e9
+name: whitelist_lookup(8)
+title: Drop events matching the detection whitelist (8 fields)
+
+description: >-
+  Drops events that match an entry in the detection whitelist, compared on eight
+  fields. The seven-field form, whitelist_lookup(7), is a separate macro.
+
+metadata:
+  created_at: "2026-10-08"
+  version: "1.0.0"
+  authors:
+    - Detection Engineering Team
+
+language: spl
+arguments:
+  - name: rule
+  - name: user
+  - name: src
+  - name: dest
+  - name: process
+  - name: parent_process
+  - name: command_line
+  - name: file_hash
+
+definition: >-
+  lookup detection_whitelist rule AS $rule$
+  user AS $user$
+  src AS $src$
+  dest AS $dest$
+  process AS $process$
+  parent_process AS $parent_process$
+  command_line AS $command_line$
+  file_hash AS $file_hash$
+  OUTPUT whitelisted | where isnull(whitelisted)
