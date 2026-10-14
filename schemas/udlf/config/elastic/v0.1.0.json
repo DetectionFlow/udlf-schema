@@ -159,7 +159,7 @@
                 "items": {
                   "type": "object",
                   "additionalProperties": false,
-                  "required": ["field", "value"],
+                  "required": ["field", "value", "type"],
                   "properties": {
                     "field": {"type": "string", "minLength": 1, "description": "Source event field."},
                     "value": {"type": "string", "minLength": 1, "description": "Indicator field."},
@@ -183,7 +183,7 @@
         "properties": {
           "list_id": {"type": "string", "minLength": 1},
           "namespace_type": {"type": "string", "enum": ["single", "agnostic"]},
-          "type": {"type": "string", "enum": ["detection", "rule_default", "endpoint"]}
+          "type": {"type": "string", "enum": ["detection", "rule_default", "endpoint", "endpoint_trusted_apps", "endpoint_trusted_devices", "endpoint_events", "endpoint_host_isolation_exceptions", "endpoint_blocklists"]}
         }
       }
     },
