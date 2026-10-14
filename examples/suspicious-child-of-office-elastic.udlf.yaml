@@ -1,0 +1,71 @@
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.3.2.json
+#
+# Showcase: an Elastic Security detection. One EQL variant deployed to Kibana's
+# detection engine through the elastic v0.1.0 config: `rule_type` follows the
+# variant language, the data scope is `index`, the schedule is Kibana-native
+# (`interval` / `from`), and severity is UDLF's word with an explicit
+# `risk_score`. A second, kuery-language variant exists for search tooling and is
+# not what the deployer picks, because `rule_type: eql` names the language.
+id: 3c1f8e0a-6d2b-4f7e-9a51-0e8b7d4c2a19
+title: Office Application Spawning a Script Interpreter
+lifecycle: live
+
+metadata:
+  created_at: "2026-10-14"
+  version: "1.0.0"
+  authors:
+    - Detection Engineering Team
+
+detection_context:
+  severity: high
+  description: |
+    Detects a Microsoft Office process starting a command or script interpreter,
+    a common first stage of macro-based initial access.
+  false_positives: |
+    Line-of-business add-ins that shell out to scripts. Baseline by parent
+    command line before enabling broadly.
+  implementation_guidance: |
+    Requires Elastic Defend process events (`logs-endpoint.events.process-*`) or
+    Sysmon process creation via Winlogbeat.
+  investigation_guidance: |
+    Review the child command line and any network connections it made shortly
+    after starting. Retrieve the originating document if it is still present.
+  references:
+    - https://attack.mitre.org/techniques/T1204/002/
+
+threat:
+  attack_version: "19"
+  attack:
+    - technique: T1204.002
+      tactics:
+        - Execution
+    - technique: T1059.001
+      tactics:
+        - Execution
+
+detection_content:
+  - language: eql
+    logic: |
+      process where host.os.type == "windows" and event.type == "start" and
+        process.parent.name : ("winword.exe", "excel.exe", "powerpnt.exe", "outlook.exe") and
+        process.name : ("powershell.exe", "pwsh.exe", "cmd.exe", "wscript.exe", "cscript.exe", "mshta.exe")
+  - language: kuery
+    description: Same match as a KQL filter, for Discover and dashboards
+    logic: >-
+      event.type:start and process.parent.name:(winword.exe or excel.exe or powerpnt.exe or outlook.exe)
+      and process.name:(powershell.exe or pwsh.exe or cmd.exe or wscript.exe or cscript.exe or mshta.exe)
+
+deployments:
+  - platform: elastic
+    config:
+      schema: elastic::0.1.0
+      rule_type: eql
+      index:
+        - logs-endpoint.events.process-*
+        - winlogbeat-*
+      risk_score: 73
+      interval: 5m
+      from: now-9m
+      tags:
+        - "Domain: Endpoint"
+        - "Tactic: Execution"

@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://detectionflow.com/schemas/udlf/config/elastic/v0.1.0.json",
+  "title": "UDLF deployment config — Elastic Security detection rules",
+  "description": "Config for `platform: elastic`. Kibana detection engine rules: rule type, data scope, scoring, schedule and type-specific settings. The query lives in `detection_content`.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "type": "string",
+      "pattern": "^elastic::[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "default": "elastic::0.1.0",
+      "description": "Sub-schema revision this block was authored against, e.g. `elastic::0.1.0`."
+    },
+    "rule_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Kibana `rule_id` this deployment owns. Defaults to the detection `id`.",
+      "examples": ["9a1a2dae-0b5f-4c3d-8305-a268d404c306"]
+    },
+    "rule_type": {
+      "type": "string",
+      "enum": ["query", "eql", "esql", "threshold", "threat_match", "new_terms"],
+      "description": "Kibana rule type. Defaults from the variant language: eql→eql, esql→esql, kuery/lucene→query."
+    },
+    "index": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1},
+      "description": "Index patterns searched. Mutually exclusive with `data_view_id`. Kibana's default security indices when both are omitted.",
+      "examples": [["logs-endpoint.events.process-*", "winlogbeat-*"]]
+    },
+    "data_view_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Kibana data view to search instead of `index`."
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["critical", "high", "medium", "low"],
+      "description": "Overrides `detection_context.severity`. UDLF `informational` deploys as `low`."
+    },
+    "risk_score": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Kibana risk score. Derived from severity when omitted (low 21, medium 47, high 73, critical 99)."
+    },
+    "interval": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*[smh]$",
+      "default": "5m",
+      "description": "How often the rule runs.",
+      "examples": ["5m", "1h"]
+    },
+    "from": {
+      "type": "string",
+      "pattern": "^now-[1-9][0-9]*[smhd]$",
+      "default": "now-6m",
+      "description": "Start of the lookback window. Set wider than `interval` to cover late-arriving events.",
+      "examples": ["now-6m", "now-65m"]
+    },
+    "max_signals": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Maximum alerts per run."
+    },
+    "timestamp_override": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Field used instead of `@timestamp` to select events, e.g. `event.ingested`."
+    },
+    "building_block": {
+      "type": "boolean",
+      "default": false,
+      "description": "Building-block rule: alerts are hidden by default and feed other rules."
+    },
+    "tags": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "description": "Kibana rule tags."
+    },
+    "threshold": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value"],
+      "description": "Threshold rule settings. Required when `rule_type` is threshold.",
+      "properties": {
+        "field": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {"type": "string", "minLength": 1},
+          "description": "Fields to group by. Empty counts all matching events together."
+        },
+        "value": {"type": "integer", "minimum": 1, "description": "Event count that raises an alert."},
+        "cardinality": {
+          "type": "array",
+          "maxItems": 1,
+          "description": "Also require this many distinct values of a field.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["field", "value"],
+            "properties": {
+              "field": {"type": "string", "minLength": 1},
+              "value": {"type": "integer", "minimum": 0}
+            }
+          }
+        }
+      }
+    },
+    "new_terms": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fields", "history_window_start"],
+      "description": "New terms rule settings. Required when `rule_type` is new_terms.",
+      "properties": {
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "items": {"type": "string", "minLength": 1},
+          "description": "Fields whose unseen value (or combination) raises an alert."
+        },
+        "history_window_start": {
+          "type": "string",
+          "pattern": "^now-[1-9][0-9]*[smhd]$",
+          "description": "How far back a value must be absent to count as new.",
+          "examples": ["now-7d"]
+        }
+      }
+    },
+    "threat_match": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["threat_index", "threat_query", "threat_mapping"],
+      "description": "Indicator match settings. Required when `rule_type` is threat_match.",
+      "properties": {
+        "threat_index": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1},
+          "description": "Indicator index patterns."
+        },
+        "threat_query": {"type": "string", "description": "KQL filter applied to the indicator indices."},
+        "threat_indicator_path": {"type": "string", "description": "Path to indicator objects in indicator documents, e.g. `threat.indicator`."},
+        "threat_mapping": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Event-to-indicator field matches. Entries in one item are ANDed; items are ORed.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["entries"],
+            "properties": {
+              "entries": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["field", "value", "type"],
+                  "properties": {
+                    "field": {"type": "string", "minLength": 1, "description": "Source event field."},
+                    "value": {"type": "string", "minLength": 1, "description": "Indicator field."},
+                    "type": {"const": "mapping", "description": "Entry kind. Kibana accepts only `mapping`."},
+                    "negate": {"type": "boolean", "description": "Match when the fields differ."}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "exceptions_list": {
+      "type": "array",
+      "description": "Kibana exception lists applied to this rule. Lists are managed separately.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["list_id", "namespace_type", "type"],
+        "properties": {
+          "list_id": {"type": "string", "minLength": 1},
+          "namespace_type": {"type": "string", "enum": ["single", "agnostic"]},
+          "type": {"type": "string", "enum": ["detection", "rule_default", "endpoint", "endpoint_trusted_apps", "endpoint_trusted_devices", "endpoint_events", "endpoint_host_isolation_exceptions", "endpoint_blocklists"]}
+        }
+      }
+    },
+    "advanced": {
+      "type": "object",
+      "description": "Escape hatch for unmodelled Kibana rule properties. Passed through verbatim and unvalidated; prefer a modelled field.",
+      "examples": [{"alert_suppression": {"group_by": ["host.name"], "duration": {"value": 1, "unit": "h"}}}]
+    }
+  },
+  "allOf": [
+    {
+      "not": {"required": ["index", "data_view_id"]},
+      "$comment": "Kibana takes one data scope; the Terraform provider rejects both."
+    },
+    {
+      "if": {"properties": {"rule_type": {"const": "esql"}}, "required": ["rule_type"]},
+      "then": {"not": {"anyOf": [{"required": ["index"]}, {"required": ["data_view_id"]}]}},
+      "$comment": "ES|QL names its source in the query's FROM clause."
+    },
+    {
+      "if": {"properties": {"rule_type": {"const": "threshold"}}, "required": ["rule_type"]},
+      "then": {"required": ["threshold"]}
+    },
+    {
+      "if": {"required": ["threshold"]},
+      "then": {"properties": {"rule_type": {"const": "threshold"}}, "required": ["rule_type"]},
+      "$comment": "A type-specific block without the type it belongs to would deploy as a plain query rule."
+    },
+    {
+      "if": {"required": ["new_terms"]},
+      "then": {"properties": {"rule_type": {"const": "new_terms"}}, "required": ["rule_type"]}
+    },
+    {
+      "if": {"required": ["threat_match"]},
+      "then": {"properties": {"rule_type": {"const": "threat_match"}}, "required": ["rule_type"]}
+    },
+    {
+      "if": {"properties": {"rule_type": {"const": "new_terms"}}, "required": ["rule_type"]},
+      "then": {"required": ["new_terms"]}
+    },
+    {
+      "if": {"properties": {"rule_type": {"const": "threat_match"}}, "required": ["rule_type"]},
+      "then": {"required": ["threat_match"]}
+    }
+  ]
+}

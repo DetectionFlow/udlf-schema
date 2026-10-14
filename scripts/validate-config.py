@@ -102,6 +102,23 @@ def cross_checks(doc: dict, dep: dict) -> list[str]:
                 f"(UDLF lifecycle: live)"
             )
 
+    if dep.get("platform") == "elastic" and "rule_type" not in config:
+        # With no explicit rule_type, Kibana's rule type follows the variant
+        # language, which the config sub-schema cannot see. An ES|QL rule names
+        # its source in the query's FROM clause and takes no index or data view.
+        languages = {v.get("language") for v in doc.get("detection_content") or []} & {
+            "kuery",
+            "lucene",
+            "eql",
+            "esql",
+        }
+        scope = [k for k in ("index", "data_view_id") if k in config]
+        if languages == {"esql"} and scope:
+            problems.append(
+                f"{' and '.join(scope)} cannot be honoured on an ES|QL rule, which "
+                f"names its source in the query's FROM clause"
+            )
+
     return problems
 
 
