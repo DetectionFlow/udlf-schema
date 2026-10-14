@@ -5,7 +5,7 @@ across multiple SIEM platforms. It is a **deploy-neutral source of truth**: a UD
 carries a detection's logic, threat context, tests, relationships and deployment *policy*, but
 never deployment *mechanics or secrets*.
 
-- **Schema (detection):** `schemas/udlf/v0.3.1.json`, `$id: https://detectionflow.com/schemas/udlf/v0.3.1.json`
+- **Schema (detection):** `schemas/udlf/v0.3.2.json`, `$id: https://detectionflow.com/schemas/udlf/v0.3.2.json`
 - **Schema (strategy):** `schemas/udlf/strategy/v0.2.0.json`, `$id: https://detectionflow.com/schemas/udlf/strategy/v0.2.0.json`
 - **File extension:** `.udlf.yaml`
 
@@ -87,7 +87,7 @@ Platforms express this differently, and one inverts the default:
 | `splunk`, `splunk-es` | `disabled = 0` in `savedsearches.conf` | `disabled = 1` |
 | `splunk-contentctl-v5-6` | `enabled_by_default: true`. contentctl permits it only for production TTP/Anomaly/Correlation, so a deployer emits `false` below `lifecycle: live` | `enabled_by_default: false` |
 | `splunk-contentctl-ng` | ship the pack, then enable post-install. ESCU 6.x has no such field | the pack default, so the deployer does nothing |
-| `sentinel`, `crowdstrike`, `sentinel-one`, `defender-for-endpoint` | rule enabled | rule created, disabled |
+| `sentinel`, `crowdstrike`, `sentinel-one`, `defender-for-endpoint`, `elastic` | rule enabled | rule created, disabled |
 
 #### Does this deployment alert?
 
@@ -105,6 +105,7 @@ per platform and no logic:
 | `defender-for-endpoint` | always. MDE custom detection rules cannot be non-alerting |
 | `crowdstrike` | `details.outcome` is `detection`, `incident` or `case`. `event` only records the match and reaches no one |
 | `sentinel-one` | always |
+| `elastic` | always, unless `config.building_block` is `true`. Building-block alerts are written but hidden from the alerts view |
 | `udlf` | `config.mode` is `alert` |
 | `splunk` | **unspecified**. Plain Splunk alert actions such as email, webhook and script are per-customer destinations and live in `config.advanced` |
 | anything else | **unknown** |
@@ -200,7 +201,7 @@ argument count, so a call with seven arguments resolves `whitelist_lookup(7)` an
 ## The detection object
 
 ```yaml
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.3.1.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.3.2.json
 id: a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d          # UUID v4
 title: Process Injection with Defensive Tooling Tampering
 lifecycle: testing                                # overall stage + pre-deployment default
@@ -321,7 +322,7 @@ changelog:                                        # top-level, last: append-only
 | `metadata.version` | ✓ | string | Semver `^\d+\.\d+\.\d+$`. |
 | `metadata.authors` | | string[] | Replaces v0.1 `created_by`. |
 | `detection_content` | | array | Logic variants; each `{ language, description?, logic }`. |
-| `detection_content[].language` | ✓* | enum | `spl`\|`kql`\|`cql`\|`sigma`\|`yara`\|`yara-l`\|`python`\|`sql`. `cql` is CrowdStrike Query Language (Falcon NG-SIEM / LogScale). |
+| `detection_content[].language` | ✓* | enum | `spl`\|`kql`\|`cql`\|`kuery`\|`lucene`\|`eql`\|`esql`\|`sigma`\|`yara`\|`yara-l`\|`python`\|`sql`. `kql` is Kusto (Sentinel, Defender). `cql` is CrowdStrike Query Language (Falcon NG-SIEM / LogScale). `kuery` is Kibana Query Language, named as Kibana's API names it so it cannot be mistaken for Kusto. `lucene`, `eql` and `esql` are Elastic's other rule languages. |
 | `detection_content[].description` | | string (1-256) | Short label distinguishing variants that share a language. Documentation only; not a deploy-time selector. |
 | `detection_content[].logic` | ✓* | string \| object | String query, **or** an embedded Sigma object when `language: sigma`. |
 | `detection_content[].requires` | | array | Supporting content **this variant** depends on; `{ type, name }`. |
@@ -636,6 +637,10 @@ not, and their `config` shapes reflect that:
 - **`crowdstrike`** schedules with a start/end window and Go-style durations (`1h0m`, `7d0h0m`)
   rather than a cron, and classifies rules against a tactic vocabulary that mixes ATT&CK ids with
   proprietary `CST*` values.
+- **`elastic`** schedules with Kibana's own `interval` and `from` (`5m`, `now-6m`). The rule type
+  follows the variant language unless `config.rule_type` says otherwise, so a `kuery` variant is a
+  plain query rule until the config names `threshold`, `new_terms` or `threat_match`, each of which
+  then requires its own block.
 - **`sentinel-one`** has no schedule at all, because STAR rules evaluate continuously. A rule is
   either a single-event match or a correlation of ordered subqueries over a time window.
 
@@ -660,18 +665,18 @@ explicit pass when you want the block checked:
 | `sentinel` | `schemas/udlf/config/sentinel/v0.1.0.json` |
 | `defender-for-endpoint` | `schemas/udlf/config/defender-for-endpoint/v0.1.0.json` |
 | `crowdstrike` | `schemas/udlf/config/crowdstrike/v0.2.0.json` |
+| `elastic` | `schemas/udlf/config/elastic/v0.1.0.json` |
 | `sentinel-one` | `schemas/udlf/config/sentinel-one/v0.1.0.json` |
 | `udlf` | `schemas/udlf/config/udlf/v0.1.0.json` |
 
-`elastic` remains unmodelled, so its `config` passes through unvalidated for now. The `udlf` row is
-the odd one out. It describes no vendor, and is the only **open** shape in the table.
+The `udlf` row is the odd one out. It describes no vendor, and is the only **open** shape in the table.
 
 They are **not** `$ref`'d from the core schema. Core validation is unchanged whether or not they
 exist, and a platform with no sub-schema goes unvalidated rather than rejected. That is the escape
 hatch working as intended.
 
 Each carries its own semver line, versioned independently of UDLF core, which is why sub-schemas
-sit at `v0.1.0` and `v0.2.0` while the core schema is at `v0.3.1`. A block may declare which
+sit at `v0.1.0` and `v0.2.0` while the core schema is at `v0.3.2`. A block may declare which
 revision it was authored against:
 
 ```yaml
@@ -1005,7 +1010,7 @@ at 3.8 MB; Elastic value lists default to ~9 MB).
 
 ```bash
 # Detection examples
-uvx check-jsonschema --schemafile schemas/udlf/v0.3.1.json examples/*.udlf.yaml
+uvx check-jsonschema --schemafile schemas/udlf/v0.3.2.json examples/*.udlf.yaml
 
 # Strategy examples
 uvx check-jsonschema --schemafile schemas/udlf/strategy/v0.2.0.json examples/strategies/*.udlf.yaml
@@ -1051,6 +1056,14 @@ the bare name at every arity. Two arities of one name are now two documents rath
 No schema version changes. `name` was already an unconstrained string, so core `v0.3.1` and macro
 `v0.1.1` remain the served versions and every existing file stays schema-valid. The convention is
 enforced by `scripts/validate-macros.py`, which rejects a parameterised SPL macro under a bare name.
+
+## Changes in v0.3.2
+
+Core `v0.3.2` adds four Elastic languages to `detection_content[].language`: `kuery` (Kibana Query
+Language), `lucene`, `eql` and `esql` (ES|QL). It is a superset of `v0.3.1`, which stays served. The
+KQL that Kibana speaks is `kuery`, not `kql`, because `kql` already means Kusto and the two are
+unrelated languages. A new `elastic` config sub-schema, `v0.1.0`, models Kibana detection engine
+rules.
 
 ## Changes in v0.3.1
 
