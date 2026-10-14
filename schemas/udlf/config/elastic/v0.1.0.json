@@ -208,9 +208,17 @@
       "then": {"required": ["threshold"]}
     },
     {
-      "if": {"anyOf": [{"required": ["threshold"]}, {"required": ["new_terms"]}, {"required": ["threat_match"]}]},
-      "then": {"required": ["rule_type"]},
+      "if": {"required": ["threshold"]},
+      "then": {"properties": {"rule_type": {"const": "threshold"}}, "required": ["rule_type"]},
       "$comment": "A type-specific block without the type it belongs to would deploy as a plain query rule."
+    },
+    {
+      "if": {"required": ["new_terms"]},
+      "then": {"properties": {"rule_type": {"const": "new_terms"}}, "required": ["rule_type"]}
+    },
+    {
+      "if": {"required": ["threat_match"]},
+      "then": {"properties": {"rule_type": {"const": "threat_match"}}, "required": ["rule_type"]}
     },
     {
       "if": {"properties": {"rule_type": {"const": "new_terms"}}, "required": ["rule_type"]},
