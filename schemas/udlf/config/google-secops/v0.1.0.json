@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://detectionflow.com/schemas/udlf/config/google-secops/v0.1.0.json",
+  "title": "UDLF deployment config — Google Security Operations rules",
+  "description": "Config for `platform: google-secops`. A Google SecOps (Chronicle) YARA-L rule and its deployment state. The rule text, including its `meta` section, lives in `detection_content` as a `yara-l` variant; `deployments[].enabled` is the rule deployment's `enabled`.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "type": "string",
+      "pattern": "^google-secops::[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "default": "google-secops::0.1.0",
+      "description": "Sub-schema revision this block was authored against, e.g. `google-secops::0.1.0`."
+    },
+    "rule_id": {
+      "type": "string",
+      "pattern": "^ru_[0-9a-f-]+$",
+      "description": "SecOps rule id this deployment owns. SecOps assigns it on create, so it is absent until the rule exists; without it the deployer matches on the YARA-L rule name.",
+      "examples": ["ru_5ad6f7c0-1b2c-4d3e-8f90-0123456789ab"]
+    },
+    "alerting": {
+      "type": "boolean",
+      "description": "Whether the rule's detections raise alerts. Left as SecOps has it when omitted; SecOps creates rules with alerting off."
+    },
+    "run_frequency": {
+      "type": "string",
+      "enum": ["LIVE", "HOURLY", "DAILY", "LIVE_CUSTOMIZABLE", "HOURLY_CUSTOMIZABLE"],
+      "description": "How often the rule runs. Must be one the rule allows: a multi-event rule with a long match window cannot run LIVE. Left as SecOps has it when omitted."
+    }
+  }
+}

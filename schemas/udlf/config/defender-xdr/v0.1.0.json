@@ -1,0 +1,495 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://detectionflow.com/schemas/udlf/config/defender-xdr/v0.1.0.json",
+  "title": "UDLF deployment config — Microsoft Defender XDR custom detection rules",
+  "description": "Config for `platform: defender-xdr`. Defender XDR custom detection rules (Microsoft Graph beta `/security/rules/detectionRules`, post-2026-06 shape): schedule, alert template, entity mappings, automated response actions and device-group scope. Written from the Graph resource pages, not the portal. The same JSON serialises to the `Microsoft.Security/detectionRules` Bicep resource. Query lives in `detection_content` (`kql`, advanced-hunting schema).",
+  "$comment": "Supersedes `defender-for-endpoint/v0.1.0`, which mirrors the legacy Graph shape (`isEnabled`, `period`, `alertTemplate.category`, `impactedAssets`, `responseActions`, `scopeType`/`scopeNames`) that Microsoft removes on 2026-10-01. Closed at every level; no root `required` because a partially-authored block is legitimate and the deployer fills Graph's required fields from the detection. The rule `id` is derived by the deployer and not carried.",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "duration": {
+      "type": "string",
+      "pattern": "^(?:\\d+d(?:\\d+h)?(?:\\d+m)?(?:\\d+s)?|\\d+h(?:\\d+m)?(?:\\d+s)?|\\d+m(?:\\d+s)?|\\d+s|P\\d+D(?:T\\d+H(?:\\d+M)?(?:\\d+S)?|T\\d+M(?:\\d+S)?|T\\d+S)?|PT\\d+H(?:\\d+M)?(?:\\d+S)?|PT\\d+M(?:\\d+S)?|PT\\d+S)$",
+      "description": "A duration in either the shorthand engineers type (`1h`, `24h`) or the ISO 8601 form the API returns (`PT1H`, `P1D`). Shape only; bounds are stated per field and enforced by the deployer.",
+      "examples": [
+        "1h",
+        "24h",
+        "PT1H",
+        "P1D"
+      ]
+    },
+    "column": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A column of the detection query's result set."
+    },
+    "column_map": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "One entity or action target, as the `*Column` fields Graph defines for it, spelled snake_case (`device_id_column` ↔ `deviceIdColumn`, `sha256_column` ↔ `sha256Column`). Each value names the query column that supplies it. The set of valid keys is the Graph mapping type's own and is not enumerated here, so a new column Microsoft adds needs no schema bump.",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*_column$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/column"
+      }
+    },
+    "column_maps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/column_map"
+      }
+    },
+    "account_map": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "description": "One account, as Graph's `accountEntityMapping` columns. Graph rejects an account without a unique id (`aad_user_id_column`, `sid_column`, `upn_column`) or a name paired with a domain (`nt_domain_column`, `dns_domain_column`, `upn_suffix_column`).",
+      "properties": {
+        "aad_user_id_column": {
+          "$ref": "#/$defs/column"
+        },
+        "sid_column": {
+          "$ref": "#/$defs/column"
+        },
+        "upn_column": {
+          "$ref": "#/$defs/column"
+        },
+        "name_column": {
+          "$ref": "#/$defs/column"
+        },
+        "nt_domain_column": {
+          "$ref": "#/$defs/column"
+        },
+        "dns_domain_column": {
+          "$ref": "#/$defs/column"
+        },
+        "upn_suffix_column": {
+          "$ref": "#/$defs/column"
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "aad_user_id_column"
+          ]
+        },
+        {
+          "required": [
+            "sid_column"
+          ]
+        },
+        {
+          "required": [
+            "upn_column"
+          ]
+        },
+        {
+          "required": [
+            "name_column",
+            "nt_domain_column"
+          ]
+        },
+        {
+          "required": [
+            "name_column",
+            "dns_domain_column"
+          ]
+        },
+        {
+          "required": [
+            "name_column",
+            "upn_suffix_column"
+          ]
+        }
+      ]
+    },
+    "device_actions": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Devices to act on, each identified by a device-id column. Maps to a `deviceAction` collection.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "device_id_column"
+        ],
+        "properties": {
+          "device_id_column": {
+            "$ref": "#/$defs/column"
+          }
+        }
+      }
+    }
+  },
+  "properties": {
+    "schema": {
+      "type": "string",
+      "pattern": "^defender-xdr::[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "default": "defender-xdr::0.1.0",
+      "description": "Sub-schema revision this block was authored against, e.g. `defender-xdr::0.1.0`."
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "high",
+        "medium",
+        "low",
+        "informational"
+      ],
+      "description": "Severity for this deployment. Optional, overrides `detection_context.severity`. Defender's own four values: it has no `critical`, and a UDLF `critical` on the detection renders as `high`. Maps to `detectionAction.alertTemplate.severity`.",
+      "examples": [
+        "high"
+      ]
+    },
+    "schedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "How often the rule runs. Maps to `schedule.frequency`. Defender couples frequency to lookback for its own tables (24h looks back 30 days, 12h/48h, 3h/12h, 1h/4h), so there is no lookback field; a rule over Sentinel analytics-tier tables in a Defender-onboarded workspace may use 5 minutes to 14 days.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "nrt": {
+                "const": true
+              }
+            },
+            "required": [
+              "nrt"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "frequency"
+              ]
+            }
+          },
+          "$comment": "Near-real-time rules run continuously as events arrive, so a frequency is meaningless. Eligibility is strict (single table, an operator allow-list, no joins or comments) and is checked by the deployer at plan time."
+        }
+      ],
+      "properties": {
+        "frequency": {
+          "$ref": "#/$defs/duration",
+          "description": "The recurring interval the rule runs at. Defender data allows `1h`, `3h`, `12h`, `24h`; Sentinel-only data allows 5 minutes to 14 days."
+        },
+        "nrt": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run continuously as events arrive rather than on an interval."
+        }
+      }
+    },
+    "alert": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The alert a match raises. Maps to `detectionAction.alertTemplate`. A custom detection always alerts; there is no non-alerting state.",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Alert title, at most 3 `{{Column}}` tokens. Overrides the detection title for this deployment; Graph requires it, so the deployer falls back to the title. Maps to `alertTemplate.title`."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Alert description for analysts, at most 3 `{{Column}}` tokens. Overrides `detection_context.description`. Maps to `alertTemplate.description`."
+        },
+        "recommended_actions": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Recommended response steps shown with the alert, at most 3 `{{Column}}` tokens. Maps to `alertTemplate.recommendedActions`."
+        },
+        "tactics": {
+          "type": "array",
+          "minItems": 1,
+          "description": "ATT&CK framing **as an override** of what the deployer derives from `threat.attack[]`. Defender nests techniques under tactics, so set this only when the file's `threat` block cannot say what you mean. Maps to `alertTemplate.tactics`.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "tactic"
+            ],
+            "properties": {
+              "tactic": {
+                "type": "string",
+                "enum": [
+                  "Reconnaissance",
+                  "ResourceDevelopment",
+                  "InitialAccess",
+                  "Execution",
+                  "Persistence",
+                  "PrivilegeEscalation",
+                  "DefenseEvasion",
+                  "CredentialAccess",
+                  "Discovery",
+                  "LateralMovement",
+                  "Collection",
+                  "CommandAndControl",
+                  "Exfiltration",
+                  "Impact"
+                ],
+                "description": "The tactic as Defender spells it."
+              },
+              "techniques": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "technique"
+                  ],
+                  "properties": {
+                    "technique": {
+                      "type": "string",
+                      "pattern": "^T\\d{4}(\\.\\d{3})?$",
+                      "description": "An ATT&CK technique or sub-technique id."
+                    },
+                    "sub_techniques": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^T\\d{4}\\.\\d{3}$"
+                      },
+                      "description": "Sub-technique ids listed under the technique."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "custom_details": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 20,
+          "description": "Custom key/value details on the alert, each value naming the query column that supplies it. At most 20, 4 KB in total. Maps to `alertTemplate.customDetails`.",
+          "propertyNames": {
+            "pattern": "^[^\\s]+$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/column"
+          }
+        }
+      }
+    },
+    "entities": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "description": "How query columns become the entities attached to the alert, grouped by entity kind. Each kind's items carry that Graph mapping type's `*Column` fields. Maps to `alertTemplate.entityMappings`. Defender requires the columns an entity kind names to exist in the query result (`DeviceId`/`DeviceName` for hosts, `Timestamp` and `ReportId` always).",
+      "properties": {
+        "accounts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/account_map"
+          }
+        },
+        "hosts": {
+          "$ref": "#/$defs/column_maps"
+        },
+        "mailboxes": {
+          "$ref": "#/$defs/column_maps"
+        },
+        "files": {
+          "$ref": "#/$defs/column_maps"
+        },
+        "processes": {
+          "$ref": "#/$defs/column_maps"
+        },
+        "ips": {
+          "$ref": "#/$defs/column_maps"
+        },
+        "urls": {
+          "$ref": "#/$defs/column_maps"
+        },
+        "dns": {
+          "$ref": "#/$defs/column_maps"
+        },
+        "registry_values": {
+          "$ref": "#/$defs/column_maps"
+        },
+        "security_groups": {
+          "$ref": "#/$defs/column_maps"
+        },
+        "oauth_applications": {
+          "$ref": "#/$defs/column_maps"
+        },
+        "cloud_applications": {
+          "$ref": "#/$defs/column_maps"
+        },
+        "azure_resources": {
+          "$ref": "#/$defs/column_maps"
+        },
+        "amazon_resources": {
+          "$ref": "#/$defs/column_maps"
+        },
+        "google_cloud_resources": {
+          "$ref": "#/$defs/column_maps"
+        },
+        "mail_clusters": {
+          "$ref": "#/$defs/column_maps"
+        },
+        "mail_messages": {
+          "$ref": "#/$defs/column_maps"
+        }
+      }
+    },
+    "actions": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "description": "Automated response actions run against the entities a match identifies. These change endpoint, file, identity and mailbox state — an isolate-device action fires up to 150 times per run — so a deployer must show them as a distinct section of any plan a human approves. Maps to `detectionAction.automatedActions`.",
+      "properties": {
+        "isolate_devices": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Network-isolate devices. Maps to `isolateDevices`.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "device_id_column",
+              "isolation_type"
+            ],
+            "properties": {
+              "device_id_column": {
+                "$ref": "#/$defs/column"
+              },
+              "isolation_type": {
+                "type": "string",
+                "enum": [
+                  "full",
+                  "selective"
+                ],
+                "description": "`full` cuts off every application and service; `selective` leaves a limited set reachable."
+              }
+            }
+          }
+        },
+        "collect_investigation_packages": {
+          "$ref": "#/$defs/device_actions"
+        },
+        "run_antivirus_scans": {
+          "$ref": "#/$defs/device_actions"
+        },
+        "initiate_investigations": {
+          "$ref": "#/$defs/device_actions"
+        },
+        "restrict_app_executions": {
+          "$ref": "#/$defs/device_actions"
+        },
+        "allow_files": {
+          "$ref": "#/$defs/column_maps",
+          "description": "Allow files identified by hash columns. Maps to `allowFiles` (`fileAction`)."
+        },
+        "block_files": {
+          "$ref": "#/$defs/column_maps",
+          "description": "Block files identified by hash columns. Maps to `blockFiles` (`fileAction`)."
+        },
+        "stop_and_quarantine_files": {
+          "$ref": "#/$defs/column_maps",
+          "description": "Stop running files and quarantine them on the identified devices. Maps to `stopAndQuarantineFiles`."
+        },
+        "mark_users_as_compromised": {
+          "$ref": "#/$defs/column_maps",
+          "description": "Raise the Entra risk level of users identified by object-id columns. Maps to `markUsersAsCompromised` (`accountObjectIdAction`)."
+        },
+        "disable_users": {
+          "$ref": "#/$defs/column_maps",
+          "description": "Disable users identified by SID columns. Maps to `disableUsers` (`accountSidAction`)."
+        },
+        "force_user_password_resets": {
+          "$ref": "#/$defs/column_maps",
+          "description": "Force a password reset for users identified by SID columns. Maps to `forceUserPasswordResets` (`accountSidAction`)."
+        },
+        "move_emails_to_inbox": {
+          "$ref": "#/$defs/column_maps",
+          "description": "Maps to `moveEmailsToInbox` (`emailAction`)."
+        },
+        "move_emails_to_junk": {
+          "$ref": "#/$defs/column_maps",
+          "description": "Maps to `moveEmailsToJunk` (`emailAction`)."
+        },
+        "move_emails_to_deleted_items": {
+          "$ref": "#/$defs/column_maps",
+          "description": "Maps to `moveEmailsToDeletedItems` (`emailAction`)."
+        },
+        "soft_delete_emails": {
+          "$ref": "#/$defs/column_maps",
+          "description": "Maps to `softDeleteEmails` (`emailAction`)."
+        },
+        "hard_delete_emails": {
+          "$ref": "#/$defs/column_maps",
+          "description": "Permanently delete the identified messages. Maps to `hardDeleteEmails` (`emailAction`)."
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "device_groups"
+      ],
+      "description": "Which device groups the rule runs against. Omit to run against every device. Maps to `detectionAction.organizationalScope.deviceGroups`.",
+      "properties": {
+        "device_groups": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Named device groups the rule is scoped to."
+        }
+      }
+    },
+    "exclusions": {
+      "type": "array",
+      "description": "Tuning exclusions appended to the deployed query in order, each with a reason.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "query"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Why this exclusion exists. Required so tuning decisions stay auditable."
+          },
+          "let": {
+            "type": "object",
+            "additionalProperties": false,
+            "patternProperties": {
+              "^[A-Za-z0-9_-]+$": {
+                "type": "string"
+              }
+            },
+            "description": "KQL `let` bindings emitted before the exclusion query and referenceable from it. Values are inserted verbatim."
+          },
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "description": "KQL appended to the base query."
+          }
+        }
+      }
+    },
+    "advanced": {
+      "type": "object",
+      "description": "Escape hatch for unmodelled Graph `detectionRule` properties. Passed through verbatim and unvalidated; prefer a modelled field.",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "integer",
+          "boolean"
+        ]
+      }
+    }
+  }
+}
