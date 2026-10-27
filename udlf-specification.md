@@ -101,7 +101,7 @@ per platform and no logic:
 | `splunk-es` | `config.notable` is present |
 | `splunk-contentctl-v5-6` | `config.type` is `TTP` or `Correlation` |
 | `splunk-contentctl-ng` | `config.finding` is present (equivalently `config.type` is `TTP` or `Correlation`) |
-| `sentinel` | always, while enabled. A scheduled analytics rule raises an alert on every match |
+| `sentinel` | always, while enabled. A scheduled analytics rule raises an alert on every match; `alert.create_incident: false` only stops incidents being opened from them |
 | `defender-xdr` | always. A custom detection *is* an alert; there is no non-alerting state |
 | `defender-for-endpoint` | always. MDE custom detection rules cannot be non-alerting. Superseded by `defender-xdr` |
 | `crowdstrike` | `details.outcome` is `detection`, `incident` or `case`. `event` only records the match and reaches no one |
@@ -644,6 +644,13 @@ not, and their `config` shapes reflect that:
 - **`defender-for-endpoint`** is the same product's legacy shape (`scheduling: NRT|1H|3H|12H|24H`,
   `alert.category`, `impacted_entities`, `scope.selection`), written against the Graph properties
   Microsoft removes on 2026-10-01. It stays served; author new content as `defender-xdr`.
+- **`sentinel`** is a scheduled search, but `scheduling.nrt: true` makes it a near-real-time rule
+  with no frequency, lookback or trigger at all. Durations accept shorthand and ISO 8601 alike.
+  Each `entities` item needs one primary identifier (an Account's `Name`, `Sid`, `AadUserId`…),
+  which may be weak in Microsoft's terms. Sentinel deploys an Account mapped by `Name` or
+  `FullName` alone, as its own templates do, but cannot reliably match it across alerts and drops
+  built-ins such as `SYSTEM`. Add a domain or unique id where the query has one. A rule moved to
+  `defender-xdr` must do so, because Graph refuses a bare account name.
 - **`crowdstrike`** schedules with a start/end window rather than a cron, classifies rules
   against a tactic vocabulary that mixes ATT&CK ids with proprietary `CST*` values, and uses
   Go-style durations (`1h0m`, `7d0h0m`).
@@ -678,7 +685,7 @@ explicit pass when you want the block checked:
 | `splunk-es` | `schemas/udlf/config/splunk-es/v0.2.0.json` |
 | `splunk-contentctl-v5-6` | `schemas/udlf/config/splunk-contentctl-v5-6/v0.1.0.json` |
 | `splunk-contentctl-ng` | `schemas/udlf/config/splunk-contentctl-ng/v0.1.0.json` |
-| `sentinel` | `schemas/udlf/config/sentinel/v0.1.0.json` |
+| `sentinel` | `schemas/udlf/config/sentinel/v0.2.0.json` |
 | `defender-xdr` | `schemas/udlf/config/defender-xdr/v0.1.0.json` |
 | `defender-for-endpoint` | `schemas/udlf/config/defender-for-endpoint/v0.1.0.json` — superseded by `defender-xdr` |
 | `crowdstrike` | `schemas/udlf/config/crowdstrike/v0.2.0.json` |
