@@ -42,33 +42,12 @@
       }
     },
     "account_map": {
-      "type": "object",
-      "additionalProperties": false,
-      "minProperties": 1,
-      "description": "One account, as Graph's `accountEntityMapping` columns. Graph rejects an account without a unique id (`aad_user_id_column`, `sid_column`, `upn_column`) or a name paired with a domain (`nt_domain_column`, `dns_domain_column`, `upn_suffix_column`).",
-      "properties": {
-        "aad_user_id_column": {
-          "$ref": "#/$defs/column"
-        },
-        "sid_column": {
-          "$ref": "#/$defs/column"
-        },
-        "upn_column": {
-          "$ref": "#/$defs/column"
-        },
-        "name_column": {
-          "$ref": "#/$defs/column"
-        },
-        "nt_domain_column": {
-          "$ref": "#/$defs/column"
-        },
-        "dns_domain_column": {
-          "$ref": "#/$defs/column"
-        },
-        "upn_suffix_column": {
-          "$ref": "#/$defs/column"
+      "allOf": [
+        {
+          "$ref": "#/$defs/column_map"
         }
-      },
+      ],
+      "description": "One account, as Graph's `accountEntityMapping` columns. Graph rejects an account without a unique id (`aad_user_id_column`, `sid_column`, `upn_column`) or a name paired with a domain (`nt_domain_column`, `dns_domain_column`, `upn_suffix_column`).",
       "anyOf": [
         {
           "required": [
