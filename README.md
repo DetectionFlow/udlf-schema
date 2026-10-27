@@ -105,9 +105,10 @@ for N arguments:
 | `schemas/udlf/lookup/v0.1.1.json` | Lookups, reference datasets a detection matches against. |
 | `schemas/udlf/config/<platform>/` | Optional, opt-in shapes for a deployment's `config` block. |
 
-Ten platform config sub-schemas ship today: `splunk`, `splunk-es`, `splunk-contentctl-v5-6`,
-`splunk-contentctl-ng`, `sentinel`, `defender-for-endpoint`, `crowdstrike`, `sentinel-one`,
-`elastic`, and `udlf` for a target nothing else models. None is referenced from the core schema, so an unmodelled
+Twelve platform config sub-schemas ship today: `splunk`, `splunk-es`, `splunk-contentctl-v5-6`,
+`splunk-contentctl-ng`, `sentinel`, `defender-xdr`, `defender-for-endpoint` (superseded by
+`defender-xdr`), `crowdstrike`, `sentinel-one`, `elastic`, `google-secops`, and `udlf` for a target
+nothing else models. None is referenced from the core schema, so an unmodelled
 platform passes through rather than failing.
 
 Each schema's path under `schemas/` mirrors its `$id` path, so the directory is served directly at

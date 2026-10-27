@@ -101,11 +101,13 @@ per platform and no logic:
 | `splunk-es` | `config.notable` is present |
 | `splunk-contentctl-v5-6` | `config.type` is `TTP` or `Correlation` |
 | `splunk-contentctl-ng` | `config.finding` is present (equivalently `config.type` is `TTP` or `Correlation`) |
-| `sentinel` | always, while enabled. A scheduled analytics rule raises an alert on every match |
-| `defender-for-endpoint` | always. MDE custom detection rules cannot be non-alerting |
+| `sentinel` | always, while enabled. A scheduled analytics rule raises an alert on every match; `alert.create_incident: false` only stops incidents being opened from them |
+| `defender-xdr` | always. A custom detection *is* an alert; there is no non-alerting state |
+| `defender-for-endpoint` | always. MDE custom detection rules cannot be non-alerting. Superseded by `defender-xdr` |
 | `crowdstrike` | `details.outcome` is `detection`, `incident` or `case`. `event` only records the match and reaches no one |
 | `sentinel-one` | always |
 | `elastic` | always, unless `config.building_block` is `true`. Building-block alerts are written but hidden from the alerts view |
+| `google-secops` | `config.alerting` is `true`. A rule with alerting off still records detections, but raises no alert |
 | `udlf` | `config.mode` is `alert` |
 | `splunk` | **unspecified**. Plain Splunk alert actions such as email, webhook and script are per-customer destinations and live in `config.advanced` |
 | anything else | **unknown** |
@@ -486,7 +488,7 @@ details are **never** here. The deployer or CI resolves them from the endpoint.
 | Field | Required | Type | Notes |
 |-------|:---:|------|-------|
 | `name` | (✓ for `udlf`) | string | Friendly name for a specific endpoint (`splunk-prod`, `splunk-staging`). Resolved to real infra/secrets. Omit when a platform has one endpoint. On `udlf` it is the only thing identifying the target, so it is required. Listed first so entries read name-then-platform across multiple endpoints. |
-| `platform` | ✓ | string | Deployment target and the **discriminator**. Known: `splunk`, `splunk-es`, `splunk-contentctl-v5-6`, `splunk-contentctl-ng`, `elastic`, `sentinel`, `defender-for-endpoint`, `crowdstrike`, `sentinel-one`, `udlf`. Selects the logic variant and **scopes the meaning of `config`**. Usually a product, but may name a delivery toolchain where that changes the shape of `config`. See [delivery paths](#when-a-platform-is-a-toolchain). Open and extensible, so unknown values validate on the common fields only. |
+| `platform` | ✓ | string | Deployment target and the **discriminator**. Known: `splunk`, `splunk-es`, `splunk-contentctl-v5-6`, `splunk-contentctl-ng`, `elastic`, `google-secops`, `sentinel`, `defender-xdr`, `defender-for-endpoint` (superseded by `defender-xdr`), `crowdstrike`, `sentinel-one`, `udlf`. Selects the logic variant and **scopes the meaning of `config`**. Usually a product, but may name a delivery toolchain where that changes the shape of `config`. See [delivery paths](#when-a-platform-is-a-toolchain). Open and extensible, so unknown values validate on the common fields only. |
 | `lifecycle` | | enum | Per-deployment stage; inherits top-level when omitted. `decommissioned` retires the deployment, so the deployer removes it rather than shipping it disabled. |
 | `enabled` | | boolean | Whether the shipped rule executes. Defaults to `true`, so it appears only where something is off. `false` = created but not executing. May not be `true` alongside `lifecycle: decommissioned`. |
 | `config` | | object | **Free-form, platform-scoped** (`additionalProperties: true`). Holds all platform-specific deployment policy and vendor round-trip fidelity: `schedule`, `suppression`, `rba`, and vendor-only fields. The core schema validates **nothing** inside it. Optional [config sub-schemas](#config-sub-schemas-opt-in) describe the known shapes, and you apply one as a separate pass. |
@@ -632,20 +634,41 @@ is unknown, so a relative time modifier, a plain duration and an ISO 8601 period
 The Splunk-family and Sentinel shapes are all "run this query on a schedule". The EDR targets are
 not, and their `config` shapes reflect that:
 
-- **`defender-for-endpoint`** couples frequency to lookback. You pick `1H`, `3H`, `12H`, `24H` or
-  `NRT`, and MDE decides the window, so there is no separate lookback field.
-- **`crowdstrike`** schedules with a start/end window and Go-style durations (`1h0m`, `7d0h0m`)
-  rather than a cron, and classifies rules against a tactic vocabulary that mixes ATT&CK ids with
-  proprietary `CST*` values.
+- **`defender-xdr`** couples frequency to lookback for Defender's own tables (`1h`, `3h`, `12h`,
+  `24h`, or `nrt: true` for continuous), so there is no lookback field; over Sentinel tables in a
+  Defender-onboarded workspace the frequency ranges from 5 minutes to 14 days. Durations accept
+  the shorthand you type (`1h`) and the ISO 8601 the API returns (`PT1H`). An `entities.accounts`
+  item needs a unique id (`aad_user_id_column`, `sid_column`, `upn_column`) or `name_column` with
+  a domain (`nt_domain_column`, `dns_domain_column`, `upn_suffix_column`); Graph refuses a bare
+  name.
+- **`defender-for-endpoint`** is the same product's legacy shape (`scheduling: NRT|1H|3H|12H|24H`,
+  `alert.category`, `impacted_entities`, `scope.selection`), written against the Graph properties
+  Microsoft removes on 2026-10-01. It stays served; author new content as `defender-xdr`.
+- **`sentinel`** is a scheduled search, but `scheduling.nrt: true` makes it a near-real-time rule
+  with no frequency, lookback or trigger at all. Durations accept shorthand and ISO 8601 alike.
+  Each `entities` item needs one primary identifier (an Account's `Name`, `Sid`, `AadUserId`…),
+  which may be weak in Microsoft's terms. Sentinel deploys an Account mapped by `Name` or
+  `FullName` alone, as its own templates do, but cannot reliably match it across alerts and drops
+  built-ins such as `SYSTEM`. Add a domain or unique id where the query has one. A rule moved to
+  `defender-xdr` must do so, because Graph refuses a bare account name.
+- **`crowdstrike`** schedules with a start/end window rather than a cron, classifies rules
+  against a tactic vocabulary that mixes ATT&CK ids with proprietary `CST*` values, and uses
+  Go-style durations (`1h0m`, `7d0h0m`).
 - **`elastic`** schedules with Kibana's own `interval` and `from` (`5m`, `now-6m`). The rule type
   follows the variant language unless `config.rule_type` says otherwise, so a `kuery` variant is a
   plain query rule until the config names `threshold`, `new_terms` or `threat_match`, each of which
   then requires its own block.
+- **`google-secops`** keeps the whole rule in the `yara-l` variant: its name, `meta`, match
+  window and outcome are YARA-L, so `config` holds only the deployment state SecOps keeps beside the
+  text (`alerting`, `run_frequency`) and the server-assigned `rule_id`. `run_frequency` is `LIVE`,
+  `HOURLY`, `DAILY`, `LIVE_CUSTOMIZABLE` or `HOURLY_CUSTOMIZABLE` (SecOps maps a multi-event rule
+  onto the customizable ones), and a multi-event rule with a long match window cannot run `LIVE`.
 - **`sentinel-one`** has no schedule at all, because STAR rules evaluate continuously. A rule is
   either a single-event match or a correlation of ordered subqueries over a time window.
 
-Two of them can also **act**. `defender-for-endpoint.actions` can isolate a device, quarantine a
-file or disable a user, and `sentinel-one.response` can network-quarantine an endpoint. Nothing
+Three of them can also **act**. `defender-xdr.actions` (and its predecessor
+`defender-for-endpoint.actions`) can isolate a device, quarantine a file, disable a user or delete
+mail, and `sentinel-one.response` can network-quarantine an endpoint. Nothing
 elsewhere in UDLF says how far that reach goes. `lifecycle` and `enabled` describe maturity and
 execution, not what happens when a rule fires. Treat those blocks as deployment policy and review
 them the way you would any other change that can take machines offline.
@@ -662,10 +685,12 @@ explicit pass when you want the block checked:
 | `splunk-es` | `schemas/udlf/config/splunk-es/v0.2.0.json` |
 | `splunk-contentctl-v5-6` | `schemas/udlf/config/splunk-contentctl-v5-6/v0.1.0.json` |
 | `splunk-contentctl-ng` | `schemas/udlf/config/splunk-contentctl-ng/v0.1.0.json` |
-| `sentinel` | `schemas/udlf/config/sentinel/v0.1.0.json` |
-| `defender-for-endpoint` | `schemas/udlf/config/defender-for-endpoint/v0.1.0.json` |
+| `sentinel` | `schemas/udlf/config/sentinel/v0.2.0.json` |
+| `defender-xdr` | `schemas/udlf/config/defender-xdr/v0.1.0.json` |
+| `defender-for-endpoint` | `schemas/udlf/config/defender-for-endpoint/v0.1.0.json` — superseded by `defender-xdr` |
 | `crowdstrike` | `schemas/udlf/config/crowdstrike/v0.2.0.json` |
 | `elastic` | `schemas/udlf/config/elastic/v0.1.0.json` |
+| `google-secops` | `schemas/udlf/config/google-secops/v0.1.0.json` |
 | `sentinel-one` | `schemas/udlf/config/sentinel-one/v0.1.0.json` |
 | `udlf` | `schemas/udlf/config/udlf/v0.1.0.json` |
 
@@ -1080,7 +1105,7 @@ where alerting is declared. `v0.2.2` stays served, so existing files keep valida
 | v0.2.2 | v0.3.0 |
 |---|---|
 | `mode: alert` | nothing. The platform's `config` already says it alerts (`notable` on `splunk-es`, `type: TTP` on contentctl). See [does this deployment alert?](#does-this-deployment-alert) |
-| `mode: monitoring` | nothing on a modelled platform, where the config says it (`rba` without `notable`, `type: Anomaly`). Platforms with no non-alerting state, Sentinel and the three EDRs, use `enabled: false`. On the target-agnostic `udlf` platform, `config.mode: monitoring`. |
+| `mode: monitoring` | nothing on a modelled platform, where the config says it (`rba` without `notable`, `type: Anomaly`). Platforms with no non-alerting state — Sentinel, Defender XDR and SentinelOne — use `enabled: false`; CrowdStrike says it with `details.outcome: event`. On the target-agnostic `udlf` platform, `config.mode: monitoring`. |
 | `mode: disabled` | `enabled: false`, which unlike `mode: disabled` no longer erases whether the deployment was alerting. |
 | `mode: warranty` | nothing. Validation against curated data is `tests[]`, which already records the data, the framework and the expected result. Maturity is `lifecycle`. A live-but-sinkholed deployment is a non-alerting platform config. |
 | `mode` was required | `platform` is the only required field on a deployment. |

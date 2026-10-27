@@ -1,0 +1,1567 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://detectionflow.com/schemas/udlf/config/sentinel/v0.2.0.json",
+  "title": "UDLF deployment config — Microsoft Sentinel",
+  "description": "Config for `platform: sentinel`. Sentinel analytics rules (`Microsoft.SecurityInsights/alertRules`, kinds `Scheduled` and `NRT`): schedule, trigger, alert, incident grouping and entity mappings. Written from the ARM API (`2025-09-01`, preview `2025-10-01-preview` for NRT, sub-techniques and `sentinelEntitiesMappings`) rather than the portal. Query lives in `detection_content`.",
+  "type": "object",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "scheduling": {
+            "properties": {
+              "nrt": {
+                "const": true
+              }
+            },
+            "required": [
+              "nrt"
+            ]
+          }
+        },
+        "required": [
+          "scheduling"
+        ]
+      },
+      "then": {
+        "not": {
+          "required": [
+            "trigger"
+          ]
+        },
+        "properties": {
+          "scheduling": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "frequency"
+                  ]
+                },
+                {
+                  "required": [
+                    "lookback"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "$comment": "Near-real-time rules are hard-coded to run every minute over the preceding minute and alert on first match, so frequency, lookback and trigger are all meaningless — Sentinel rejects them. The inverse (a scheduled rule requires frequency, lookback and trigger) is left to the deployer, since a partially-authored UDLF config is legitimate and the deployer fills the rest."
+    }
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "pattern": "^sentinel::[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "default": "sentinel::0.2.0",
+      "description": "Sub-schema revision this block was authored against, e.g. `sentinel::0.2.0`."
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "high",
+        "medium",
+        "low",
+        "informational"
+      ],
+      "description": "Severity for this deployment. Optional, overrides `detection_context.severity`. Sentinel's own four values: it has no `Critical`, and a UDLF `critical` on the detection renders as `High`.",
+      "examples": [
+        "high"
+      ]
+    },
+    "template": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "uuid"
+      ],
+      "description": "Provenance of the Sentinel gallery template this rule came from. Maps to `alertRuleTemplateName` / `templateVersion`; the API returns no version for most rules, so only `uuid` is required.",
+      "properties": {
+        "uuid": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+          "description": "Template rule UUID, findable in the Sentinel rule repository or analyticsrules.exchange. Maps to `alertRuleTemplateName`."
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "Template version in a.b.c form. Maps to `templateVersion`."
+        }
+      }
+    },
+    "scheduling": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "How often the rule runs and how far back it looks. Sentinel allows 5 minutes to 14 days for both, and `lookback` must be at least `frequency`; the deployer enforces the bounds.",
+      "properties": {
+        "nrt": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run as a Near Real Time rule: one-minute cadence, alerting on first match. Sentinel cannot convert a rule between NRT and scheduled."
+        },
+        "frequency": {
+          "$ref": "#/$defs/duration",
+          "description": "How often the query runs. 5 minutes to 14 days. Maps to `queryFrequency`."
+        },
+        "lookback": {
+          "$ref": "#/$defs/duration",
+          "description": "How far back each run searches. 5 minutes to 14 days, and at least `frequency`. Maps to `queryPeriod`."
+        }
+      }
+    },
+    "trigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operator",
+        "threshold"
+      ],
+      "description": "How many query results are needed to raise an alert. Not valid on NRT rules.",
+      "properties": {
+        "operator": {
+          "type": "string",
+          "enum": [
+            "Equal",
+            "GreaterThan",
+            "LessThan",
+            "NotEqual"
+          ],
+          "default": "GreaterThan",
+          "description": "Comparison applied against `threshold`."
+        },
+        "threshold": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "Result count the operator compares against. Maps to `triggerThreshold`."
+        }
+      }
+    },
+    "alert": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Alert presentation and incident behaviour. Maps to `alertDetailsOverride`, `suppression*`, `incidentConfiguration.createIncident`, `customDetails` and `tactics`. `title` and `description` support `{{columnName}}` substitution.",
+      "properties": {
+        "create_incident": {
+          "type": "boolean",
+          "default": true,
+          "description": "Create incidents from alerts this rule raises. Maps to `incidentConfiguration.createIncident`."
+        },
+        "suppression": {
+          "oneOf": [
+            {
+              "type": "boolean",
+              "const": false,
+              "description": "Disable suppression."
+            },
+            {
+              "$ref": "#/$defs/duration",
+              "description": "Suppression duration, 5 minutes to 1 day."
+            }
+          ],
+          "default": false,
+          "description": "How long to wait after firing before the rule may fire again, 5 minutes to 1 day. Boolean `false` disables suppression. Maps to `suppressionEnabled` / `suppressionDuration`.",
+          "examples": [
+            "1h",
+            false
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Alert display-name format, up to 256 chars with at most 3 `{{columnName}}` placeholders. Overrides the detection title on the alert. Maps to `alertDetailsOverride.alertDisplayNameFormat`."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Alert description format, up to 5000 chars with at most 3 `{{columnName}}` placeholders. Overrides `detection_context.description` on the alert. Maps to `alertDetailsOverride.alertDescriptionFormat`."
+        },
+        "severity_column": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Query result column that supplies the alert severity at run time. Maps to `alertDetailsOverride.alertSeverityColumnName`."
+        },
+        "tactics_column": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Query result column that supplies the alert tactics at run time. Maps to `alertDetailsOverride.alertTacticsColumnName`."
+        },
+        "tactics": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "Collection",
+              "CommandAndControl",
+              "CredentialAccess",
+              "DefenseEvasion",
+              "Discovery",
+              "Execution",
+              "Exfiltration",
+              "Impact",
+              "ImpairProcessControl",
+              "InhibitResponseFunction",
+              "InitialAccess",
+              "LateralMovement",
+              "Persistence",
+              "PreAttack",
+              "PrivilegeEscalation",
+              "Reconnaissance",
+              "ResourceDevelopment"
+            ]
+          },
+          "description": "Sentinel tactics **in addition to** those the deployer derives from `threat.attack[].tactics`, as Sentinel spells them (`CommandAndControl`). Use it for tactics no technique in `threat` carries, and for the three values with no ATT&CK Enterprise home: `PreAttack`, `ImpairProcessControl`, `InhibitResponseFunction`. Maps to `tactics`."
+        },
+        "custom_details": {
+          "type": "array",
+          "description": "Surface query columns as named key/value pairs on the alert. At most 20. Maps to `customDetails`.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "key",
+              "column"
+            ],
+            "properties": {
+              "key": {
+                "type": "string",
+                "pattern": "^[^\\s]+$",
+                "description": "Field name shown on the alert. No whitespace."
+              },
+              "column": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Query result column supplying the value."
+              }
+            }
+          }
+        },
+        "dynamic_properties": {
+          "type": "array",
+          "description": "Override built-in alert properties from query columns. Maps to `alertDetailsOverride.alertDynamicProperties`.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "property",
+              "column"
+            ],
+            "properties": {
+              "property": {
+                "type": "string",
+                "enum": [
+                  "AlertLink",
+                  "ConfidenceLevel",
+                  "ConfidenceScore",
+                  "ExtendedLinks",
+                  "ProductComponentName",
+                  "ProductName",
+                  "ProviderName",
+                  "RemediationSteps",
+                  "Techniques"
+                ],
+                "description": "The V3 alert property to override. Severity and tactics are `severity_column` / `tactics_column`, not dynamic properties."
+              },
+              "column": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Query result column supplying the value. Maps to `value`."
+              }
+            }
+          }
+        }
+      }
+    },
+    "grouping": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "How query results become alerts, and how alerts become incidents.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "alert": {
+                "properties": {
+                  "enabled": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              }
+            },
+            "required": [
+              "alert"
+            ]
+          },
+          "then": {
+            "properties": {
+              "alert": {
+                "required": [
+                  "enabled",
+                  "grouping_lookback",
+                  "matching"
+                ]
+              }
+            }
+          },
+          "$comment": "Sentinel needs a window and a matching method before it can group alerts into incidents."
+        }
+      ],
+      "properties": {
+        "event": {
+          "type": "string",
+          "enum": [
+            "SingleAlert",
+            "AlertPerResult"
+          ],
+          "default": "SingleAlert",
+          "description": "`SingleAlert` groups all query results into one alert; `AlertPerResult` raises one per result."
+        },
+        "alert": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled"
+          ],
+          "description": "Group alerts from this rule into a single incident. Sentinel caps an incident at 150 alerts.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false,
+              "description": "Maps to `incidentConfiguration.groupingConfiguration.enabled`."
+            },
+            "reopen_closed_incidents": {
+              "type": "boolean",
+              "description": "Re-open a closed matching incident instead of opening a new one. Maps to `...groupingConfiguration.reopenClosedIncident`."
+            },
+            "grouping_lookback": {
+              "$ref": "#/$defs/duration",
+              "description": "Only group alerts raised within this window. Maps to `...groupingConfiguration.lookbackDuration`."
+            },
+            "matching": {
+              "type": "string",
+              "enum": [
+                "AllEntities",
+                "AnyAlert",
+                "Selected"
+              ],
+              "default": "AllEntities",
+              "description": "`AllEntities` groups when every entity matches; `AnyAlert` groups everything this rule raises; `Selected` uses the `group_by_*` lists."
+            },
+            "group_by_entities": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "enum": [
+                  "Account",
+                  "AzureResource",
+                  "CloudApplication",
+                  "DNS",
+                  "File",
+                  "FileHash",
+                  "Host",
+                  "IP",
+                  "MailCluster",
+                  "MailMessage",
+                  "Mailbox",
+                  "Malware",
+                  "Process",
+                  "RegistryKey",
+                  "RegistryValue",
+                  "SecurityGroup",
+                  "SubmissionMail",
+                  "URL"
+                ]
+              },
+              "description": "Entity types to group on when `matching` is `Selected`. Only entities this rule maps may be used."
+            },
+            "group_by_alert_details": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "enum": [
+                  "DisplayName",
+                  "Severity"
+                ]
+              },
+              "description": "Alert details to group on when `matching` is `Selected`. Maps to `...groupingConfiguration.groupByAlertDetails`."
+            },
+            "group_by_custom_details": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Custom detail keys to group on when `matching` is `Selected`. Only keys declared in `alert.custom_details` may be used."
+            }
+          }
+        }
+      }
+    },
+    "entities": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10,
+      "description": "Entity mappings: how query columns become the accounts, hosts and IPs Sentinel builds investigation graphs from. At most 10 mappings, each with at most 3 identifiers and at least one primary one. Sentinel accepts weak identifiers; see the spec. Maps to `entityMappings`.",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "entity",
+              "mappings"
+            ],
+            "properties": {
+              "entity": {
+                "const": "Account"
+              },
+              "mappings": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "description": "Field mappings for the Account entity. Needs at least one primary identifier: Sid, Name, FullName, AadUserId, PUID, ObjectGuid.",
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "identifier": {
+                      "enum": [
+                        "Sid",
+                        "Name",
+                        "FullName",
+                        "AadUserId",
+                        "PUID",
+                        "ObjectGuid"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "identifier"
+                  ]
+                },
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "identifier",
+                    "column"
+                  ],
+                  "properties": {
+                    "identifier": {
+                      "type": "string",
+                      "enum": [
+                        "Name",
+                        "FullName",
+                        "NTDomain",
+                        "DnsDomain",
+                        "UPNSuffix",
+                        "Sid",
+                        "AadTenantId",
+                        "AadUserId",
+                        "PUID",
+                        "IsDomainJoined",
+                        "DisplayName",
+                        "ObjectGuid",
+                        "CloudAppAccountId"
+                      ],
+                      "description": "Which Account attribute this column supplies."
+                    },
+                    "column": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Query result column holding the value. Must exist in the query output."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "entity",
+              "mappings"
+            ],
+            "properties": {
+              "entity": {
+                "const": "Host"
+              },
+              "mappings": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "description": "Field mappings for the Host entity. Needs at least one primary identifier: HostName, FullName, NetBiosName, AzureID, OMSAgentID.",
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "identifier": {
+                      "enum": [
+                        "HostName",
+                        "FullName",
+                        "NetBiosName",
+                        "AzureID",
+                        "OMSAgentID"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "identifier"
+                  ]
+                },
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "identifier",
+                    "column"
+                  ],
+                  "properties": {
+                    "identifier": {
+                      "type": "string",
+                      "enum": [
+                        "FullName",
+                        "DnsDomain",
+                        "NTDomain",
+                        "HostName",
+                        "NetBiosName",
+                        "AzureID",
+                        "OMSAgentID",
+                        "OSFamily",
+                        "OSVersion",
+                        "IsDomainJoined"
+                      ],
+                      "description": "Which Host attribute this column supplies."
+                    },
+                    "column": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Query result column holding the value. Must exist in the query output."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "entity",
+              "mappings"
+            ],
+            "properties": {
+              "entity": {
+                "const": "IP"
+              },
+              "mappings": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 2,
+                "description": "Field mappings for the IP entity. Needs at least one primary identifier: Address.",
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "identifier": {
+                      "enum": [
+                        "Address"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "identifier"
+                  ]
+                },
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "identifier",
+                    "column"
+                  ],
+                  "properties": {
+                    "identifier": {
+                      "type": "string",
+                      "enum": [
+                        "Address",
+                        "AddressScope"
+                      ],
+                      "description": "Which IP attribute this column supplies."
+                    },
+                    "column": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Query result column holding the value. Must exist in the query output."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "entity",
+              "mappings"
+            ],
+            "properties": {
+              "entity": {
+                "const": "Malware"
+              },
+              "mappings": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 2,
+                "description": "Field mappings for the Malware entity. Needs at least one primary identifier: Name.",
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "identifier": {
+                      "enum": [
+                        "Name"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "identifier"
+                  ]
+                },
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "identifier",
+                    "column"
+                  ],
+                  "properties": {
+                    "identifier": {
+                      "type": "string",
+                      "enum": [
+                        "Name",
+                        "Category"
+                      ],
+                      "description": "Which Malware attribute this column supplies."
+                    },
+                    "column": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Query result column holding the value. Must exist in the query output."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "entity",
+              "mappings"
+            ],
+            "properties": {
+              "entity": {
+                "const": "File"
+              },
+              "mappings": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 2,
+                "description": "Field mappings for the File entity. Needs at least one primary identifier: Name.",
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "identifier": {
+                      "enum": [
+                        "Name"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "identifier"
+                  ]
+                },
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "identifier",
+                    "column"
+                  ],
+                  "properties": {
+                    "identifier": {
+                      "type": "string",
+                      "enum": [
+                        "Directory",
+                        "Name"
+                      ],
+                      "description": "Which File attribute this column supplies."
+                    },
+                    "column": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Query result column holding the value. Must exist in the query output."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "entity",
+              "mappings"
+            ],
+            "properties": {
+              "entity": {
+                "const": "Process"
+              },
+              "mappings": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "description": "Field mappings for the Process entity. Needs at least one primary identifier: CommandLine, ProcessId.",
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "identifier": {
+                      "enum": [
+                        "CommandLine",
+                        "ProcessId"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "identifier"
+                  ]
+                },
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "identifier",
+                    "column"
+                  ],
+                  "properties": {
+                    "identifier": {
+                      "type": "string",
+                      "enum": [
+                        "ProcessId",
+                        "CommandLine",
+                        "ElevationToken",
+                        "CreationTimeUtc"
+                      ],
+                      "description": "Which Process attribute this column supplies."
+                    },
+                    "column": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Query result column holding the value. Must exist in the query output."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "entity",
+              "mappings"
+            ],
+            "properties": {
+              "entity": {
+                "const": "CloudApplication"
+              },
+              "mappings": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "description": "Field mappings for the CloudApplication entity. Needs at least one primary identifier: AppId, Name.",
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "identifier": {
+                      "enum": [
+                        "AppId",
+                        "Name"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "identifier"
+                  ]
+                },
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "identifier",
+                    "column"
+                  ],
+                  "properties": {
+                    "identifier": {
+                      "type": "string",
+                      "enum": [
+                        "AppId",
+                        "SaasId",
+                        "Name",
+                        "InstanceName"
+                      ],
+                      "description": "Which CloudApplication attribute this column supplies."
+                    },
+                    "column": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Query result column holding the value. Must exist in the query output."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "entity",
+              "mappings"
+            ],
+            "properties": {
+              "entity": {
+                "const": "DNS"
+              },
+              "mappings": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "description": "Field mappings for the DNS entity. Needs at least one primary identifier: DomainName.",
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "identifier": {
+                      "enum": [
+                        "DomainName"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "identifier"
+                  ]
+                },
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "identifier",
+                    "column"
+                  ],
+                  "properties": {
+                    "identifier": {
+                      "type": "string",
+                      "enum": [
+                        "DomainName"
+                      ],
+                      "description": "Which DNS attribute this column supplies."
+                    },
+                    "column": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Query result column holding the value. Must exist in the query output."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "entity",
+              "mappings"
+            ],
+            "properties": {
+              "entity": {
+                "const": "AzureResource"
+              },
+              "mappings": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "description": "Field mappings for the AzureResource entity. Needs at least one primary identifier: ResourceId.",
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "identifier": {
+                      "enum": [
+                        "ResourceId"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "identifier"
+                  ]
+                },
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "identifier",
+                    "column"
+                  ],
+                  "properties": {
+                    "identifier": {
+                      "type": "string",
+                      "enum": [
+                        "ResourceId"
+                      ],
+                      "description": "Which AzureResource attribute this column supplies."
+                    },
+                    "column": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Query result column holding the value. Must exist in the query output."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "entity",
+              "mappings"
+            ],
+            "properties": {
+              "entity": {
+                "const": "FileHash"
+              },
+              "mappings": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 2,
+                "description": "Field mappings for the FileHash entity. Needs at least one primary identifier: Value.",
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "identifier": {
+                      "enum": [
+                        "Value"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "identifier"
+                  ]
+                },
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "identifier",
+                    "column"
+                  ],
+                  "properties": {
+                    "identifier": {
+                      "type": "string",
+                      "enum": [
+                        "Algorithm",
+                        "Value"
+                      ],
+                      "description": "Which FileHash attribute this column supplies."
+                    },
+                    "column": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Query result column holding the value. Must exist in the query output."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "entity",
+              "mappings"
+            ],
+            "properties": {
+              "entity": {
+                "const": "RegistryKey"
+              },
+              "mappings": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 2,
+                "description": "Field mappings for the RegistryKey entity. Needs at least one primary identifier: Hive, Key.",
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "identifier": {
+                      "enum": [
+                        "Hive",
+                        "Key"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "identifier"
+                  ]
+                },
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "identifier",
+                    "column"
+                  ],
+                  "properties": {
+                    "identifier": {
+                      "type": "string",
+                      "enum": [
+                        "Hive",
+                        "Key"
+                      ],
+                      "description": "Which RegistryKey attribute this column supplies."
+                    },
+                    "column": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Query result column holding the value. Must exist in the query output."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "entity",
+              "mappings"
+            ],
+            "properties": {
+              "entity": {
+                "const": "RegistryValue"
+              },
+              "mappings": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "description": "Field mappings for the RegistryValue entity. Needs at least one primary identifier: Name.",
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "identifier": {
+                      "enum": [
+                        "Name"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "identifier"
+                  ]
+                },
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "identifier",
+                    "column"
+                  ],
+                  "properties": {
+                    "identifier": {
+                      "type": "string",
+                      "enum": [
+                        "Name",
+                        "Value",
+                        "ValueType"
+                      ],
+                      "description": "Which RegistryValue attribute this column supplies."
+                    },
+                    "column": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Query result column holding the value. Must exist in the query output."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "entity",
+              "mappings"
+            ],
+            "properties": {
+              "entity": {
+                "const": "SecurityGroup"
+              },
+              "mappings": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "description": "Field mappings for the SecurityGroup entity. Needs at least one primary identifier: DistinguishedName, SID, ObjectGuid.",
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "identifier": {
+                      "enum": [
+                        "DistinguishedName",
+                        "SID",
+                        "ObjectGuid"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "identifier"
+                  ]
+                },
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "identifier",
+                    "column"
+                  ],
+                  "properties": {
+                    "identifier": {
+                      "type": "string",
+                      "enum": [
+                        "DistinguishedName",
+                        "SID",
+                        "ObjectGuid"
+                      ],
+                      "description": "Which SecurityGroup attribute this column supplies."
+                    },
+                    "column": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Query result column holding the value. Must exist in the query output."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "entity",
+              "mappings"
+            ],
+            "properties": {
+              "entity": {
+                "const": "URL"
+              },
+              "mappings": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 1,
+                "description": "Field mappings for the URL entity. Needs at least one primary identifier: Url.",
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "identifier": {
+                      "enum": [
+                        "Url"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "identifier"
+                  ]
+                },
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "identifier",
+                    "column"
+                  ],
+                  "properties": {
+                    "identifier": {
+                      "type": "string",
+                      "enum": [
+                        "Url"
+                      ],
+                      "description": "Which URL attribute this column supplies."
+                    },
+                    "column": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Query result column holding the value. Must exist in the query output."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "entity",
+              "mappings"
+            ],
+            "properties": {
+              "entity": {
+                "const": "Mailbox"
+              },
+              "mappings": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "description": "Field mappings for the Mailbox entity. Needs at least one primary identifier: MailboxPrimaryAddress.",
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "identifier": {
+                      "enum": [
+                        "MailboxPrimaryAddress"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "identifier"
+                  ]
+                },
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "identifier",
+                    "column"
+                  ],
+                  "properties": {
+                    "identifier": {
+                      "type": "string",
+                      "enum": [
+                        "MailboxPrimaryAddress",
+                        "DisplayName",
+                        "Upn",
+                        "RiskLevel",
+                        "ExternalDirectoryObjectId"
+                      ],
+                      "description": "Which Mailbox attribute this column supplies."
+                    },
+                    "column": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Query result column holding the value. Must exist in the query output."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "entity",
+              "mappings"
+            ],
+            "properties": {
+              "entity": {
+                "const": "MailCluster"
+              },
+              "mappings": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "description": "Field mappings for the MailCluster entity. Needs at least one primary identifier: Query, Source.",
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "identifier": {
+                      "enum": [
+                        "Query",
+                        "Source"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "identifier"
+                  ]
+                },
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "identifier",
+                    "column"
+                  ],
+                  "properties": {
+                    "identifier": {
+                      "type": "string",
+                      "enum": [
+                        "NetworkMessageIds",
+                        "CountByDeliveryStatus",
+                        "CountByThreatType",
+                        "CountByProtectionStatus",
+                        "Threats",
+                        "Query",
+                        "QueryTime",
+                        "MailCount",
+                        "IsVolumeAnomaly",
+                        "Source",
+                        "ClusterSourceIdentifier",
+                        "ClusterSourceType",
+                        "ClusterQueryStartTime",
+                        "ClusterQueryEndTime",
+                        "ClusterGroup"
+                      ],
+                      "description": "Which MailCluster attribute this column supplies."
+                    },
+                    "column": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Query result column holding the value. Must exist in the query output."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "entity",
+              "mappings"
+            ],
+            "properties": {
+              "entity": {
+                "const": "MailMessage"
+              },
+              "mappings": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "description": "Field mappings for the MailMessage entity. Needs at least one primary identifier: NetworkMessageId, Recipient.",
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "identifier": {
+                      "enum": [
+                        "NetworkMessageId",
+                        "Recipient"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "identifier"
+                  ]
+                },
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "identifier",
+                    "column"
+                  ],
+                  "properties": {
+                    "identifier": {
+                      "type": "string",
+                      "enum": [
+                        "Recipient",
+                        "Urls",
+                        "Threats",
+                        "Sender",
+                        "P1Sender",
+                        "P1SenderDisplayName",
+                        "P1SenderDomain",
+                        "P2Sender",
+                        "P2SenderDisplayName",
+                        "P2SenderDomain",
+                        "SenderIP",
+                        "ReceivedDate",
+                        "NetworkMessageId",
+                        "InternetMessageId",
+                        "Subject",
+                        "BodyFingerprintBin1",
+                        "BodyFingerprintBin2",
+                        "BodyFingerprintBin3",
+                        "BodyFingerprintBin4",
+                        "BodyFingerprintBin5",
+                        "AntispamDirection",
+                        "DeliveryAction",
+                        "DeliveryLocation",
+                        "Language",
+                        "ThreatDetectionMethods"
+                      ],
+                      "description": "Which MailMessage attribute this column supplies."
+                    },
+                    "column": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Query result column holding the value. Must exist in the query output."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "entity",
+              "mappings"
+            ],
+            "properties": {
+              "entity": {
+                "const": "SubmissionMail"
+              },
+              "mappings": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "description": "Field mappings for the SubmissionMail entity. Needs at least one primary identifier: SubmissionId, NetworkMessageId, Recipient, Submitter.",
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "identifier": {
+                      "enum": [
+                        "SubmissionId",
+                        "NetworkMessageId",
+                        "Recipient",
+                        "Submitter"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "identifier"
+                  ]
+                },
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "identifier",
+                    "column"
+                  ],
+                  "properties": {
+                    "identifier": {
+                      "type": "string",
+                      "enum": [
+                        "SubmissionId",
+                        "SubmissionDate",
+                        "Submitter",
+                        "NetworkMessageId",
+                        "Timestamp",
+                        "Recipient",
+                        "Sender",
+                        "SenderIp",
+                        "Subject",
+                        "ReportType"
+                      ],
+                      "description": "Which SubmissionMail attribute this column supplies."
+                    },
+                    "column": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Query result column holding the value. Must exist in the query output."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "entities_columns": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Query result columns holding a pre-built entities JSON array, as `_ASim`/`_Im` parsers emit. Preview API only (`sentinelEntitiesMappings[].columnName`); a rule carrying it deploys through `2025-10-01-preview`."
+    },
+    "exclusions": {
+      "type": "array",
+      "description": "Tuning exclusions appended to the deployed query in order, each with a reason.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "query"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Why this exclusion exists. Required so tuning decisions stay auditable."
+          },
+          "let": {
+            "type": "object",
+            "description": "KQL `let` bindings emitted before the exclusion query and referenceable from it. Values are inserted verbatim.",
+            "patternProperties": {
+              "^[A-Za-z0-9_-]+$": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "description": "KQL appended to the base query."
+          }
+        }
+      }
+    },
+    "advanced": {
+      "type": "object",
+      "description": "Escape hatch for unmodelled Sentinel API properties. Passed through verbatim and unvalidated; prefer a modelled field.",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "integer",
+          "boolean"
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "duration": {
+      "type": "string",
+      "pattern": "^(?:\\d+d(?:\\d+h)?(?:\\d+m)?(?:\\d+s)?|\\d+h(?:\\d+m)?(?:\\d+s)?|\\d+m(?:\\d+s)?|\\d+s|P\\d+D(?:T\\d+H(?:\\d+M)?(?:\\d+S)?|T\\d+M(?:\\d+S)?|T\\d+S)?|PT\\d+H(?:\\d+M)?(?:\\d+S)?|PT\\d+M(?:\\d+S)?|PT\\d+S)$",
+      "description": "A duration in either the shorthand engineers type (`5m`, `1h`, `14d`, `2d1h30m`) or the ISO 8601 form the API returns (`PT5M`, `PT1H`, `P14D`, `P2DT1H30M`). Shape only: bounds are stated per field and enforced by the deployer, not the pattern, so a value outside them is a plan error rather than an unreadable file.",
+      "examples": [
+        "5m",
+        "1h",
+        "14d",
+        "PT1H",
+        "P2DT1H30M"
+      ]
+    }
+  },
+  "$comment": "Lessons from v0.1.0: duration patterns enumerated the 5m..14d bounds (a `P2DT1H30M` the API returns was unrepresentable), `FileHas` was a typo for `FileHash`, `severity` offered a `critical` Sentinel does not have, and `alertSeverityColumnName` / `alertTacticsColumnName` / `sentinelEntitiesMappings` were unmodelled. Techniques and sub-techniques are deliberately absent: `threat.attack[]` carries them and the deployer splits `T####.###` across the API's `techniques` and `subTechniques` lists. The rule id is derived by the deployer, so it is not carried either."
+}

