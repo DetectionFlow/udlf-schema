@@ -1,7 +1,7 @@
 ## Important Conventions
 - The Sigma `$ref` points at an immutable upstream tag (SigmaHQ/sigma-specification `v2.1.0`), not `main`
 - Schema ID follows pattern: `https://detectionflow.com/schemas/udlf/v{version}.json` (strategy under `.../udlf/strategy/v{version}.json`, config sub-schemas under `.../udlf/config/{platform}/v{version}.json`). The `.json` suffix is deliberate
-- Every schema's repo path mirrors its `$id` path (`schemas/udlf/v0.3.0.json` ⇄ `/schemas/udlf/v0.3.0.json`)
+- Every schema's repo path mirrors its `$id` path (`schemas/udlf/v0.4.0.json` ⇄ `/schemas/udlf/v0.4.0.json`)
 
 ## Schema Descriptions
 - Description fields within schema documents should be short, tooltip-style, help text that aid human engineers and agents in quickly understanding the field purpose and usage.
@@ -13,8 +13,8 @@
 ## Common Tasks
 
 ### Modifying the Schema
-- `schemas/udlf/v0.3.0.json` is the current detection schema; `v0.2.0.json`, `v0.2.1.json` and
-  `v0.2.2.json` are frozen and stay served. A structural change means copying to a new `v{next}.json`, updating `$id`/`title`, and
+- `schemas/udlf/v0.4.0.json` is the current detection schema; every earlier `v*.json` is frozen and
+  stays served. A structural change means copying to a new `v{next}.json`, updating `$id`/`title`, and
   repointing the examples + docs. Do not edit a published version in place, with the exception of changes to the wording of description fields which can an be made without version bumps
 - Update `udlf-specification.md` to reflect schema changes
 - Test changes against example files in `examples/`
@@ -26,7 +26,7 @@
 
 ### Validation
 Validate examples with `check-jsonschema` (resolves the remote Sigma `$ref`):
-- `uvx check-jsonschema --schemafile schemas/udlf/v0.3.0.json examples/*.udlf.yaml`
+- `uvx check-jsonschema --schemafile schemas/udlf/v0.4.0.json examples/*.udlf.yaml`
 - `uvx check-jsonschema --schemafile schemas/udlf/strategy/v0.2.0.json examples/strategies/*.udlf.yaml`
 
 `deployments[].config` is free-form to the core schema, so it needs a second, opt-in pass that
