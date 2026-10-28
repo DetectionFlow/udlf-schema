@@ -15,7 +15,7 @@ secrets out of it.
 | **Keep several detection formats in one repo** | SPL, KQL, Sigma and YARA-L coexist as `language` variants of one detection. Sigma rules embed and validate natively, no rewrite. |
 | **Run several SIEMs, or detections that span them** | Per-platform logic variants plus a `deployments` array targeting each SIEM independently. **Strategies** group the detections that work together into one analytic story. |
 | **Have a hunting team doing detection-as-code** | Ad-hoc hunts are detections with no `deployments` entry. A hunt matures along `lifecycle` and graduates into a standing non-alerting deployment without leaving the format. |
-| **Want to stop branching for staging vs. live** | `lifecycle` is the stage and `enabled` is the switch, both per deployment. A detection moves by changing a value, not a branch. |
+| **Want to stop branching for staging vs. live** | `lifecycle` is the stage and `detection_active` is the switch, both per deployment. A detection moves by changing a value, not a branch. |
 | **Use one SIEM natively but want DaC** | Author in your platform's own language, or wrap an existing Sigma rule, and get lifecycle, testing and deployment management around it. |
 | **Are migrating SIEM** | Carry both platforms' logic in one detection. Run the new one at `lifecycle: testing` while the old stays `live`, then flip. |
 | **Are building an internal SIEM** | A deploy-neutral source of truth with a schema to validate against. Your deployer translates and pushes to whatever backend you built. |
@@ -23,7 +23,7 @@ secrets out of it.
 ## What a detection looks like
 
 ```yaml
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.3.2.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.4.0.json
 id: a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d
 title: Process Injection with Defensive Tooling Tampering
 lifecycle: testing                     # research -> development -> testing -> live
@@ -53,7 +53,7 @@ deployments:                           # ...shipped to two platforms
         rule_title: Process injection on $dest$
   - name: sentinel-prod
     platform: sentinel
-    enabled: false                     # shipped, switched off while tuning
+    detection_active: false            # shipped, switched off while tuning
 ```
 
 Full walkthrough in [`udlf-specification.md`](udlf-specification.md); runnable files in
@@ -65,7 +65,7 @@ Point your editor at the schema and you get completion and validation as you typ
 
 ```yaml
 # detections
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.3.2.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.4.0.json
 # strategies
 # yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/strategy/v0.2.0.json
 # macros
@@ -78,7 +78,7 @@ In CI, use `check-jsonschema`, which resolves the remote Sigma `$ref` that `lang
 variants rely on:
 
 ```bash
-uvx check-jsonschema --schemafile schemas/udlf/v0.3.2.json examples/*.udlf.yaml
+uvx check-jsonschema --schemafile schemas/udlf/v0.4.0.json examples/*.udlf.yaml
 uvx check-jsonschema --schemafile schemas/udlf/strategy/v0.2.0.json examples/strategies/*.udlf.yaml
 uvx check-jsonschema --schemafile schemas/udlf/macro/v0.1.1.json examples/macros/*.udlf.yaml
 uvx check-jsonschema --schemafile schemas/udlf/lookup/v0.1.1.json examples/lookups/*.udlf.yaml
@@ -99,7 +99,7 @@ for N arguments:
 
 | File | What it describes |
 |------|-------------------|
-| `schemas/udlf/v0.3.2.json` | Detections. The main one. |
+| `schemas/udlf/v0.4.0.json` | Detections. The main one. |
 | `schemas/udlf/strategy/v0.2.0.json` | Strategies, which group detections under one narrative. |
 | `schemas/udlf/macro/v0.1.1.json` | Macros, reusable query snippets a detection pulls in via `requires`. |
 | `schemas/udlf/lookup/v0.1.1.json` | Lookups, reference datasets a detection matches against. |

@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.3.2.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.4.0.json
 #
 # Showcase: an Elastic Security detection. One EQL variant deployed to Kibana's
 # detection engine through the elastic v0.1.0 config: `rule_type` follows the

@@ -66,41 +66,21 @@ def sub_schema_for(platform: str, declared: object) -> pathlib.Path | None:
 def cross_checks(doc: dict, dep: dict) -> list[str]:
     """Rules spanning the deployment, its config, and inherited top-level values.
 
-    The core schema catches `lifecycle: decommissioned` alongside `enabled: true`
-    only when the deployment states its own lifecycle, since a `deployments[]`
-    subschema cannot see the top-level value it would otherwise inherit. And no
-    JSON Schema can reach from `enabled` into the sibling `config`, which is
-    where contentctl's own constraint on `enabled_by_default` lives.
+    The core schema catches `lifecycle: decommissioned` alongside
+    `detection_active: true` only when the deployment states its own lifecycle,
+    since a `deployments[]` subschema cannot see the top-level value it would
+    otherwise inherit.
     """
     problems = []
     config = dep.get("config") or {}
 
     lifecycle = dep.get("lifecycle", doc.get("lifecycle"))
-    if lifecycle == "decommissioned" and dep.get("enabled") is True:
+    if lifecycle == "decommissioned" and dep.get("detection_active") is True:
         source = "its own" if "lifecycle" in dep else "the inherited top-level"
         problems.append(
-            f"enabled: true conflicts with {source} lifecycle: decommissioned, "
+            f"detection_active: true conflicts with {source} lifecycle: decommissioned, "
             f"a retired deployment is removed, not shipped switched on"
         )
-
-    if dep.get("platform") == "splunk-contentctl-v5-6" and dep.get("enabled") is True:
-        # contentctl permits enabled_by_default only for *production* TTP, Anomaly
-        # and Correlation. UDLF `lifecycle: live` is what maps onto production, so
-        # an explicit `enabled: true` anywhere else cannot be honoured. Only the
-        # explicit value is checked: where `enabled` is omitted the deployer clamps
-        # the default to false below `live`, which is not an authoring error.
-        if config.get("type") == "Hunting":
-            problems.append(
-                "enabled: true cannot be honoured on a Hunting detection, because "
-                "contentctl permits enabled_by_default only for production TTP, "
-                "Anomaly and Correlation"
-            )
-        elif lifecycle != "live":
-            problems.append(
-                f"enabled: true cannot be honoured at lifecycle: {lifecycle}, because "
-                f"contentctl permits enabled_by_default only for production detections "
-                f"(UDLF lifecycle: live)"
-            )
 
     if dep.get("platform") == "elastic" and "rule_type" not in config:
         # With no explicit rule_type, Kibana's rule type follows the variant

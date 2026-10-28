@@ -240,7 +240,7 @@
     "enabled_by_default": {
       "type": "boolean",
       "default": false,
-      "description": "Whether the saved search is enabled on install. Where the UDLF deployment `enabled` flag lands. contentctl permits `true` only for production TTP, Anomaly and Correlation."
+      "description": "Whether the saved search is enabled on install. Install state only, independent of `detection_active`; deployers ship `false`."
     },
     "explanation": {
       "type": "string",

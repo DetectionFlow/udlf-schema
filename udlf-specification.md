@@ -5,7 +5,7 @@ across multiple SIEM platforms. It is a **deploy-neutral source of truth**: a UD
 carries a detection's logic, threat context, tests, relationships and deployment *policy*, but
 never deployment *mechanics or secrets*.
 
-- **Schema (detection):** `schemas/udlf/v0.3.2.json`, `$id: https://detectionflow.com/schemas/udlf/v0.3.2.json`
+- **Schema (detection):** `schemas/udlf/v0.4.0.json`, `$id: https://detectionflow.com/schemas/udlf/v0.4.0.json`
 - **Schema (strategy):** `schemas/udlf/strategy/v0.2.0.json`, `$id: https://detectionflow.com/schemas/udlf/strategy/v0.2.0.json`
 - **File extension:** `.udlf.yaml`
 
@@ -63,7 +63,7 @@ They vary independently, so they live in three different places:
 | Question | Where it lives | Values |
 |------|-------|--------|
 | **How mature is it?** | top-level `lifecycle`, overridable per deployment | `research` → `development` → `testing` → `live` → `decommissioned` |
-| **Does it execute?** | `enabled`, per deployment | `true` (default) / `false` |
+| **Does it execute?** | `detection_active`, per deployment | `true` (default) / `false` |
 | **Does it alert?** | the platform's own `config` | platform-specific. See [the table below](#does-this-deployment-alert) |
 
 Top-level `lifecycle` is the overall stage and the pre-deployment default. A deployment that omits
@@ -71,23 +71,30 @@ it inherits the top-level value.
 
 `lifecycle` also decides whether a deployment ships at all. A `decommissioned` deployment is
 retired, so the deployer removes it rather than shipping it switched off. That is why the schema
-rejects `enabled: true` alongside it.
+rejects `detection_active: true` alongside it.
 
-`enabled` answers only whether a shipped rule runs. It defaults to `true`, so it appears in a file
-only where something is off. `enabled: false` means **created but not executing**. The rule is
+`detection_active` answers only whether a shipped rule runs. It defaults to `true`, so it appears in a file
+only where something is off. `detection_active: false` means **created but not executing**. The rule is
 still built and uploaded, which preserves its config, schedule and tuning across a pause. That
 differs from omitting the deployment entry, which means the detection is not deployed there at all.
 It differs again from `decommissioned`, which retires the deployment. A `live` detection paused for
-tuning stays `live` and only its `enabled` changes, so nothing is lost about what it was.
+tuning stays `live` and only its `detection_active` changes, so nothing is lost about what it was.
 
-Platforms express this differently, and one inverts the default:
+Platforms express this differently:
 
-| platform | `enabled: true` | `enabled: false` |
+| platform | `detection_active: true` | `detection_active: false` |
 |---|---|---|
 | `splunk`, `splunk-es` | `disabled = 0` in `savedsearches.conf` | `disabled = 1` |
-| `splunk-contentctl-v5-6` | `enabled_by_default: true`. contentctl permits it only for production TTP/Anomaly/Correlation, so a deployer emits `false` below `lifecycle: live` | `enabled_by_default: false` |
+| `splunk-contentctl-v5-6` | shipped with `enabled_by_default: false`, then switched on after install by the customer's own process | shipped the same way; the post-install process leaves it off |
 | `splunk-contentctl-ng` | ship the pack, then enable post-install. ESCU 6.x has no such field | the pack default, so the deployer does nothing |
 | `sentinel`, `crowdstrike`, `sentinel-one`, `defender-for-endpoint`, `elastic` | rule enabled | rule created, disabled |
+
+contentctl's `enabled_by_default` is **install state, not execution**, and lives only in the
+`splunk-contentctl-v5-6` config. Splunk Cloud installs an app on every search head in a stack, so a
+search enabled on install is scheduled once per search head. A deployer therefore always ships
+`enabled_by_default: false`, whatever the source says, and searches are enabled after install.
+Neither `detection_active` nor `lifecycle` sets it, and it says nothing about whether the
+detection is active.
 
 #### Does this deployment alert?
 
@@ -119,7 +126,7 @@ One trap worth naming, because it looks like a non-alerting switch and is not.
 `sentinel.alert.create_incident: false` stops incidents being opened from the alerts a rule raises.
 The rule still raises them, and they still land in the alerts table. It reduces incident noise, so
 it is worth setting, but a consumer that reads it as non-alerting will undercount Sentinel alerts.
-Sentinel has no non-alerting state; `enabled: false` is the only way to stop it.
+Sentinel has no non-alerting state; `detection_active: false` is the only way to stop it.
 
 For `splunk-es` the rule is **normative**, not a heuristic. A deployment carrying `notable` raises
 a notable event. One without it does not alert, and contributes risk through `rba` only. Omitting
@@ -203,7 +210,7 @@ argument count, so a call with seven arguments resolves `whitelist_lookup(7)` an
 ## The detection object
 
 ```yaml
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.3.2.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.4.0.json
 id: a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d          # UUID v4
 title: Process Injection with Defensive Tooling Tampering
 lifecycle: testing                                # overall stage + pre-deployment default
@@ -299,7 +306,7 @@ deployments:                                      # where + how it runs
         threat_objects: [{ field: SourceImage, type: process_name }]
   - name: sentinel-prod
     platform: sentinel                            # lifecycle omitted -> inherits `testing`
-    enabled: false                                # shipped but switched off while tuning
+    detection_active: false                       # shipped but switched off while tuning
 
 changelog:                                        # top-level, last: append-only, grows unbounded
   - date: "2026-06-10"
@@ -479,8 +486,8 @@ Author attribution for the upstream rule stays in `metadata.authors`.
 ### deployments
 
 Each entry binds the detection to a **platform** and, optionally, a named **endpoint**. Requires
-`platform` only; `name`, `lifecycle` and `enabled` are optional (`lifecycle` inherits the top-level
-value, `enabled` defaults to `true`). `name` becomes **required** when `platform` is `udlf`.
+`platform` only; `name`, `lifecycle` and `detection_active` are optional (`lifecycle` inherits the
+top-level value, `detection_active` defaults to `true`). `name` becomes **required** when `platform` is `udlf`.
 
 Everything platform-specific lives in the free-form **`config`** block. Secrets and connection
 details are **never** here. The deployer or CI resolves them from the endpoint.
@@ -490,10 +497,10 @@ details are **never** here. The deployer or CI resolves them from the endpoint.
 | `name` | (✓ for `udlf`) | string | Friendly name for a specific endpoint (`splunk-prod`, `splunk-staging`). Resolved to real infra/secrets. Omit when a platform has one endpoint. On `udlf` it is the only thing identifying the target, so it is required. Listed first so entries read name-then-platform across multiple endpoints. |
 | `platform` | ✓ | string | Deployment target and the **discriminator**. Known: `splunk`, `splunk-es`, `splunk-contentctl-v5-6`, `splunk-contentctl-ng`, `elastic`, `google-secops`, `sentinel`, `defender-xdr`, `defender-for-endpoint` (superseded by `defender-xdr`), `crowdstrike`, `sentinel-one`, `udlf`. Selects the logic variant and **scopes the meaning of `config`**. Usually a product, but may name a delivery toolchain where that changes the shape of `config`. See [delivery paths](#when-a-platform-is-a-toolchain). Open and extensible, so unknown values validate on the common fields only. |
 | `lifecycle` | | enum | Per-deployment stage; inherits top-level when omitted. `decommissioned` retires the deployment, so the deployer removes it rather than shipping it disabled. |
-| `enabled` | | boolean | Whether the shipped rule executes. Defaults to `true`, so it appears only where something is off. `false` = created but not executing. May not be `true` alongside `lifecycle: decommissioned`. |
+| `detection_active` | | boolean | Whether the shipped rule executes. Defaults to `true`, so it appears only where something is off. `false` = created but not executing. May not be `true` alongside `lifecycle: decommissioned`. |
 | `config` | | object | **Free-form, platform-scoped** (`additionalProperties: true`). Holds all platform-specific deployment policy and vendor round-trip fidelity: `schedule`, `suppression`, `rba`, and vendor-only fields. The core schema validates **nothing** inside it. Optional [config sub-schemas](#config-sub-schemas-opt-in) describe the known shapes, and you apply one as a separate pass. |
 
-Only `platform` and the optional `name`, `lifecycle` and `enabled` are first-class. Whether the
+Only `platform` and the optional `name`, `lifecycle` and `detection_active` are first-class. Whether the
 deployment alerts is **not** among them, on purpose. You read it from the platform's own `config`
 (see [does this deployment alert?](#does-this-deployment-alert)).
 
@@ -571,7 +578,7 @@ which `splunk/security_content` publishes as generated JSON Schema.
 | Risk message | one shared `rba.message` | one `message` **per** intermediate-finding entity |
 | Schedule | not in the config. `type` matches a built-in ESCU **deployment**, which supplies it | a named `schedule`, or an inline `custom_schedule`. There are no deployments |
 | Suppression | `tags.throttling.{fields, period}` | **no equivalent**, and not authorable in the detection at all |
-| Install state | `enabled_by_default` | no equivalent; `status` (from UDLF `lifecycle`) governs |
+| Install state | `enabled_by_default`, always shipped `false`; independent of `detection_active` | no equivalent; `status` (from UDLF `lifecycle`) governs |
 | Extra required field | none | `category` (application \| cloud \| endpoint \| network \| web) |
 | Risk score | capped at 100 | unbounded; `0` is legal and means "alert without contributing risk" |
 | `asset_type` | its own closed list | a **different** closed list. The two overlap, but neither contains the other |
@@ -669,8 +676,8 @@ not, and their `config` shapes reflect that:
 Three of them can also **act**. `defender-xdr.actions` (and its predecessor
 `defender-for-endpoint.actions`) can isolate a device, quarantine a file, disable a user or delete
 mail, and `sentinel-one.response` can network-quarantine an endpoint. Nothing
-elsewhere in UDLF says how far that reach goes. `lifecycle` and `enabled` describe maturity and
-execution, not what happens when a rule fires. Treat those blocks as deployment policy and review
+elsewhere in UDLF says how far that reach goes. `lifecycle` and `detection_active` describe maturity
+and execution, not what happens when a rule fires. Treat those blocks as deployment policy and review
 them the way you would any other change that can take machines offline.
 
 #### Config sub-schemas (opt-in)
@@ -701,7 +708,7 @@ exist, and a platform with no sub-schema goes unvalidated rather than rejected. 
 hatch working as intended.
 
 Each carries its own semver line, versioned independently of UDLF core, which is why sub-schemas
-sit at `v0.1.0` and `v0.2.0` while the core schema is at `v0.3.2`. A block may declare which
+sit at `v0.1.0` and `v0.2.0` while the core schema is at `v0.4.0`. A block may declare which
 revision it was authored against:
 
 ```yaml
@@ -738,7 +745,7 @@ toolchain's own models forbid extra keys at every level, so an unmodelled field 
 build anyway.
 
 Every shape leaves out the same things, because UDLF already owns them elsewhere: the query
-(it belongs in `detection_content`), maturity and execution (`lifecycle` and `enabled`),
+(it belongs in `detection_content`), maturity and execution (`lifecycle` and `detection_active`),
 authorship (`metadata.authors`), the set of target endpoints (one deployment entry each), and any
 vendor-assigned rule id. UDLF is desired-state only, so reconciling against what is deployed stays
 with the deployer. Plain ATT&CK restatements give way to the top-level `threat` block.
@@ -1035,7 +1042,7 @@ at 3.8 MB; Elastic value lists default to ~9 MB).
 
 ```bash
 # Detection examples
-uvx check-jsonschema --schemafile schemas/udlf/v0.3.2.json examples/*.udlf.yaml
+uvx check-jsonschema --schemafile schemas/udlf/v0.4.0.json examples/*.udlf.yaml
 
 # Strategy examples
 uvx check-jsonschema --schemafile schemas/udlf/strategy/v0.2.0.json examples/strategies/*.udlf.yaml
@@ -1081,6 +1088,23 @@ the bare name at every arity. Two arities of one name are now two documents rath
 No schema version changes. `name` was already an unconstrained string, so core `v0.3.1` and macro
 `v0.1.1` remain the served versions and every existing file stays schema-valid. The convention is
 enforced by `scripts/validate-macros.py`, which rejects a parameterised SPL macro under a bare name.
+
+## Changes in v0.4.0
+
+Core `v0.4.0` renames the deployment field `enabled` to `detection_active`. Its meaning is
+unchanged: `false` is created but not executing, it defaults to `true`, and it may not be `true`
+alongside `lifecycle: decommissioned`. `v0.3.2` stays served.
+
+The rename separates execution from contentctl's install-time `enabled_by_default`, which
+`v0.3.x` mapped onto `enabled` for `splunk-contentctl-v5-6`. Because contentctl content ships
+disabled on install, that mapping read every such deployment as switched off. Install state now
+lives only in `config.enabled_by_default`, which a deployer always ships as `false`.
+
+| v0.3.x | v0.4.0 |
+|---|---|
+| `enabled: false` | `detection_active: false` |
+| `enabled: false` on `splunk-contentctl-v5-6` | **delete the key.** It recorded contentctl's install default, not a pause |
+| `enabled: true` | delete the key; `true` is the default |
 
 ## Changes in v0.3.2
 

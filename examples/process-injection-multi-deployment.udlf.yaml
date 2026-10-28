@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.3.2.json
+# yaml-language-server: $schema=https://detectionflow.com/schemas/udlf/v0.4.0.json
 #
 # Showcase: one threat-idea, two logic variants (SPL + KQL), five deployments on
 # different platforms and delivery paths — each at its own lifecycle stage. Three
@@ -185,7 +185,7 @@ deployments:
   - name: escu-6-content-pack
     platform: splunk-contentctl-ng
     lifecycle: development
-    enabled: false                   # ESCU 6.x ships every detection disabled and has
+    detection_active: false          # ESCU 6.x ships every detection disabled and has
                                      # no enable flag; `true` would oblige the deployer
                                      # to switch it on after install.
     config:
@@ -265,3 +265,7 @@ changelog:
       `warranty` became a sentinel config that raises no incidents; the contentctl-ng
       pack now states `enabled: false`; added a target-agnostic udlf deployment for the
       external SOC-dashboard feed.
+  - date: "2026-10-28"
+    version: "0.7.0"
+    author: Detection Engineering Team
+    summary: Migrated to UDLF v0.4.0 — the contentctl-ng pack's `enabled` is now `detection_active`.
