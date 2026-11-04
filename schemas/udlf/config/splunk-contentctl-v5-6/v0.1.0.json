@@ -191,7 +191,7 @@
     },
     "drilldown_searches": {
       "type": "array",
-      "description": "Drilldown searches surfaced with the alert. Omit to let contentctl generate defaults from the risk objects.",
+      "description": "Drilldown searches surfaced with the alert. contentctl 5.6 generates none: a production non-Hunting detection needs at least two, one containing `%original_detection_search%`.",
       "items": {
         "type": "object",
         "additionalProperties": false,
